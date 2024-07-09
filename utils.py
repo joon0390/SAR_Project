@@ -1,3 +1,7 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
 def array_2_plot(array):
     '''
     각 shapefile을 변환된 DEM 영역에 맞춰 변환한 array가 input
