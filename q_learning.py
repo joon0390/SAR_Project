@@ -13,42 +13,19 @@ def calculate_slope(x, y, dem_array):
     slope = np.sqrt(dzdx**2 + dzdy**2)
     return slope
 
-def reward_function(state):
-    # 보상 함수: 보상 및 패널티를 구체화
-    x, y, elevation, slope, rirsv, wkmstrm, road, watershed_basins, channels = state
-    
-    reward = -1  # 기본 패널티
-
-    # 도로에 도달하면 높은 보상
-    if road:
-        reward += 20
-    # 강이나 경사가 큰 지역에 있으면 큰 패널티
-    if rirsv:
-        reward -= 10
-    if slope > 0.5:
-        reward -= 10
-    # 작은 강(개천) 근처에 있으면 중간 패널티
-    if wkmstrm:
-        reward -= 5
-    # 워터셰드 채널에 있으면 보상
-    if channels:
-        reward += 5
-
-    return reward
-
 def discretize_state(state, q_mean):
     # 상태를 디스크리트 상태로 변환
     x, y = state[:2]
     max_x, max_y = q_mean.shape[0] - 1, q_mean.shape[1] - 1
     return min(x // 10, max_x), min(y // 10, max_y)
 
-def bayesian_q_learning(dem_array, rirsv_array, wkmstrm_array, road_array, watershed_basins_array, channels_array):
+def bayesian_q_learning(dem_array, rirsv_array, wkmstrm_array, road_array, watershed_basins_array, channels_array, processor):
     # 베이지안 Q-러닝 파라미터 초기화
     q_mean = np.zeros((dem_array.shape[0] // 10, dem_array.shape[1] // 10, 6))
     q_variance = np.ones((dem_array.shape[0] // 10, dem_array.shape[1] // 10, 6))
-    alpha = 0.1  # 학습률
+    alpha = 0.2  # 학습률
     gamma = 0.9  # 할인 인자
-    epsilon = 0.9  # 탐험 vs 활용 비율
+    epsilon = 0.8  # 탐험 vs 활용 비율
     beta = 0.01  # 불확실성에 대한 가중치
     prev_path = []
 
@@ -110,7 +87,7 @@ def bayesian_q_learning(dem_array, rirsv_array, wkmstrm_array, road_array, water
                           watershed_basins_array[next_x, next_y], channels_array[next_x, next_y])
 
             next_discretized_state = discretize_state(next_state, q_mean)
-            reward = reward_function(next_state)
+            reward = processor.reward_function(next_state)
 
             # Q-값 업데이트
             q_mean[discretized_state][action] = (1 - alpha) * q_mean[discretized_state][action] + alpha * (reward + gamma * np.max(q_mean[next_discretized_state]))
