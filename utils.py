@@ -4,7 +4,7 @@ def array_2_plot(array):
     '''
     array = pd.DataFrame(array)
     fig, ax = plt.subplots(figsize=(20, 20)) 
-    ax.imshow(watershed_basins_transformed, cmap='gray', interpolation='none') 
+    ax.imshow(array, cmap='gray', interpolation='none') 
     ax.set_title('Array Visualization')
     plt.show()
 
