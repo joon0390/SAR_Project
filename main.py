@@ -39,4 +39,5 @@ if __name__ == "__main__":
     # 경로 출력
     print("Path taken by the agent:")
     print(path)
+    print("finished")
     
