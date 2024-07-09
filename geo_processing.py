@@ -55,6 +55,7 @@ class GISProcessor:
                         if 0 <= x < array.shape[0] and 0 <= y < array.shape[1]:
                             array[x, y] = 1
         return array
+    
     def reward_function(self, state):
             '''
             보상 함수: 보상 및 패널티를 구체화
@@ -97,3 +98,36 @@ def load_shapefiles():
     
     return rirsv, wkmstrm, road, watershed_basins, channels
 
+if __name__ == "__main__":
+    from geo_processing import GISProcessor, load_shapefiles
+    from q_learning import bayesian_q_learning, simulate_path
+    import os
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from rasterio.plot import show
+    import pandas as pd
+    from utils import array_2_plot
+    
+    extracted_path = '/Users/heekim/Desktop/heekimjun/WiSAR/data/GIS 데이터_20240704'
+    dem_path = os.path.join(extracted_path, 'dem/dem.tif')
+    area_path = os.path.join(extracted_path, 'area/area.shp')
+
+    # GISProcessor 클래스 인스턴스 생성
+    processor = GISProcessor(dem_path, area_path)
+
+    # DEM 데이터를 area의 경계에 맞춰 클리핑
+    dem_array, dem_transform, dem_meta = processor.clip_dem_to_area()
+
+    # shapefiles 로드
+    rirsv, wkmstrm, road, watershed_basins, channels = load_shapefiles()
+
+    # 각 shapefile을 변환된 DEM 영역에 맞춰 변환
+    rirsv_transformed = processor.transform_shapefile_to_dem(rirsv)
+    wkmstrm_transformed = processor.transform_shapefile_to_dem(wkmstrm)
+    road_transformed = processor.transform_shapefile_to_dem(road)
+    watershed_basins_transformed = processor.transform_shapefile_to_dem(watershed_basins)
+    channels_transformed = processor.transform_shapefile_to_dem(channels)
+
+    
+    array_2_plot(road_transformed)
+    

@@ -5,17 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from rasterio.plot import show
 import pandas as pd
-
-def array_2_plot(array):
-    '''
-    각 shapefile을 변환된 DEM 영역에 맞춰 변환한 array가 input
-    '''
-    array = pd.DataFrame(array)
-    fig, ax = plt.subplots(figsize=(20, 20)) 
-    ax.imshow(watershed_basins_transformed, cmap='gray', interpolation='none') 
-    ax.set_title('Array Visualization')
-    plt.show()
-
+from utils import array_2_plot
 
 if __name__ == "__main__":
     # 파일 경로 설정
@@ -49,5 +39,4 @@ if __name__ == "__main__":
     # 경로 출력
     print("Path taken by the agent:")
     print(path)
-    
     
