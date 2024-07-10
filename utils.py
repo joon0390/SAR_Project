@@ -1,6 +1,29 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from rasterio.plot import show
+from pyproj import Transformer
+
+def show_path(dem_array, dem_transform, path, road_transformed):
+    '''
+    경로를 DEM 지도 위에 시각화
+    '''
+    fig, ax = plt.subplots(figsize=(10, 10))
+    show(dem_array, transform=dem_transform, ax=ax, cmap='terrain')
+    
+    # 경로 플롯
+    path_x, path_y = zip(*path)
+    ax.plot(path_y, path_x, marker='o', color='red', linewidth=2, markersize=5, label='Path')
+
+    # 도로 플롯
+    road_coords = np.column_stack(np.where(road_transformed == 1))
+    ax.scatter(road_coords[:, 1], road_coords[:, 0], color='blue', s=1, label='Roads')
+
+    ax.set_title('Path Visualization on DEM')
+    ax.legend()
+    
+    plt.show()
+
 
 def array_2_plot(array):
     '''
