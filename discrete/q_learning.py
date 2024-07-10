@@ -1,23 +1,5 @@
 import numpy as np
-
-def get_elevation(x, y, dem_array):
-    # 주어진 좌표의 고도 값 반환
-    return dem_array[x, y]
-
-def calculate_slope(x, y, dem_array):
-    # 주어진 좌표의 경사 값 계산
-    if x <= 0 or x >= dem_array.shape[0] - 1 or y <= 0 or y >= dem_array.shape[1] - 1:
-        return 0  # 경계 조건에서 경사는 0으로 설정
-    dzdx = (dem_array[x + 1, y] - dem_array[x - 1, y]) / 2  # x 방향의 경사도 계산
-    dzdy = (dem_array[x, y + 1] - dem_array[x, y - 1]) / 2  # y 방향의 경사도 계산
-    slope = np.sqrt(dzdx**2 + dzdy**2)  # 경사도 계산
-    return slope
-
-def discretize_state(state, q_mean):
-    # 상태를 디스크리트 상태로 변환
-    x, y = state[:2]  # 상태에서 x, y 좌표 추출
-    max_x, max_y = q_mean.shape[0] - 1, q_mean.shape[1] - 1  # Q-테이블의 최대 인덱스
-    return min(x // 10, max_x), min(y // 10, max_y)  # 좌표를 10으로 나누고 최대값을 넘지 않도록 제한
+from utils import get_elevation, calculate_slope, discretize_state
 
 # 하이퍼 파라미터 설정
 alpha = 0.2  # 학습률
@@ -34,6 +16,7 @@ def bayesian_q_learning(dem_array, rirsv_array, wkmstrm_array, road_array, water
     for episode in range(1000):
         # 에피소드 초기 상태 무작위 설정
         x, y = np.random.randint(1, dem_array.shape[0] - 1), np.random.randint(1, dem_array.shape[1] - 1)
+        processor.start_x, processor.start_y = x, y  # 시작 좌표 저장
         # 현재 상태를 정의
         state = (x, y, get_elevation(x, y, dem_array), calculate_slope(x, y, dem_array),
                  rirsv_array[x, y], wkmstrm_array[x, y], road_array[x, y],
@@ -125,7 +108,7 @@ def simulate_path(start_x, start_y, q_mean, dem_array, rirsv_array, wkmstrm_arra
     # 경로 시뮬레이션 함수: 주어진 시작점에서 학습된 Q-값을 사용하여 경로를 생성
     path = [(start_x, start_y)]
     x, y = start_x, start_y
-    max_steps = 100  # 최대 스텝 수
+    max_steps = 100
 
     def discretize_state(state):
         x, y = state[:2]
@@ -177,11 +160,11 @@ def simulate_path(start_x, start_y, q_mean, dem_array, rirsv_array, wkmstrm_arra
         next_x = min(max(next_x, 0), dem_array.shape[0] - 1)
         next_y = min(max(next_y, 0), dem_array.shape[1] - 1)
 
-        path.append((next_x, next_y))
+        path.append((next_x, next_y))  # 경로에 추가
 
-        x, y = next_x, next_y
+        x, y = next_x, next_y  # 현재 좌표 업데이트
 
-        if road_array[x, y]:
+        if road_array[x, y]:  # 도로에 도달하면 시뮬레이션 종료
             break
 
     return path
