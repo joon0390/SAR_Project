@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+import rasterio
+import geopandas as gpd
 import matplotlib.pyplot as plt
 from rasterio.plot import show
 from pyproj import Transformer
@@ -13,16 +15,25 @@ def show_path(dem_array, dem_transform, path, road_transformed):
     
     # 경로 플롯
     path_x, path_y = zip(*path)
-    ax.plot(path_y, path_x, marker='o', color='red', linewidth=2, markersize=5, label='Path')
+    path_coords = [dem_transform * (x, y) for x, y in zip(path_y, path_x)]
+    path_x_transformed, path_y_transformed = zip(*path_coords)
+    ax.plot(path_y_transformed, path_x_transformed, marker='o', color='red', linewidth=2, markersize=5, label='Path')
 
     # 도로 플롯
     road_coords = np.column_stack(np.where(road_transformed == 1))
-    ax.scatter(road_coords[:, 1], road_coords[:, 0], color='blue', s=1, label='Roads')
+    
+    if road_coords.size > 0:
+        road_coords_transformed = [dem_transform * (x, y) for x, y in road_coords]
+        road_x_transformed, road_y_transformed = zip(*road_coords_transformed)
+        ax.scatter(road_y_transformed, road_x_transformed, color='blue', s=1, label='Roads')
+    else:
+        print("Warning: No road coordinates found in the road_transformed array.")
 
     ax.set_title('Path Visualization on DEM')
     ax.legend()
     
     plt.show()
+
 
 
 def array_2_plot(array):
@@ -48,3 +59,34 @@ def calculate_slope(x, y, dem_array):
     slope = np.sqrt(dzdx**2 + dzdy**2)  # 경사도 계산
     return slope
 
+def plot_dem_and_shapefile(dem_file_path, shapefile_path, cmap='terrain', shapefile_color='red'):
+    """
+    DEM 파일과 셰이프파일을 함께 그리는 함수
+    
+    Parameters:
+    - dem_file_path: str, DEM 파일의 경로
+    - shapefile_path: str, 셰이프파일의 경로
+    - cmap: str, DEM 파일의 컬러맵 (기본값은 'terrain')
+    - shapefile_color: str, 셰이프파일의 경계선 색상 (기본값은 'red')
+    """
+    # DEM 파일 읽기
+    with rasterio.open(dem_file_path) as dem_dataset:
+        dem_data = dem_dataset.read(1)
+        dem_transform = dem_dataset.transform
+
+    # 셰이프 파일 읽기
+    shapefile_data = gpd.read_file(shapefile_path)
+
+    # 플롯 설정
+    fig, ax = plt.subplots(figsize=(10, 10))
+
+    # DEM 데이터 플롯
+    show(dem_data, transform=dem_transform, ax=ax, cmap=cmap)
+
+    # 셰이프 파일 플롯
+    shapefile_data.plot(ax=ax, facecolor='none', edgecolor=shapefile_color)
+
+    plt.title('DEM and Shapefile Overlay')
+    plt.xlabel('Longitude')
+    plt.ylabel('Latitude')
+    plt.show()
