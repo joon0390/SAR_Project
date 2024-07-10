@@ -4,9 +4,15 @@
 
 ## 프로젝트 구조
 
-- geo_processing.py # GIS 데이터 처리 관련 함수 및 클래스
-- q_learning.py # 강화학습 알고리즘 구현
-- main.py # 메인 실행 파일
-- README.md # 프로젝트 설명 파일
-- requirements.txt # 프로젝트 의존성 파일
-- data # GIS 데이터 폴더 (DEM, shapefile 등)
+- geo_processing.py 
+    - GIS 데이터 처리 관련 함수 및 클래스
+- q_learning.py 
+    - 강화학습 알고리즘 구현
+- main.py 
+    - 메인 실행 파일
+- README.md
+    - 프로젝트 설명 파일
+- requirements.txt 
+    - 프로젝트 의존성 파일
+- data 
+    - GIS 데이터 폴더 (DEM, shapefile 등)
