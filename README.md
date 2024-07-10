@@ -15,7 +15,7 @@
 - requirements.txt 
     - 프로젝트 의존성 파일
 - config.py
-    - 하이퍼 파리미터와 파일위치 
+    - config
 - data 
     - GIS 데이터 폴더 (DEM, shapefile 등)
 
