@@ -5,34 +5,24 @@ import geopandas as gpd
 import matplotlib.pyplot as plt
 from rasterio.plot import show
 from pyproj import Transformer
+from rasterio.transform import Affine
 
-def show_path(dem_array, dem_transform, path, road_transformed):
+def show_path_on_dem(dem_array, path):
     '''
     경로를 DEM 지도 위에 시각화
     '''
     fig, ax = plt.subplots(figsize=(10, 10))
-    show(dem_array, transform=dem_transform, ax=ax, cmap='terrain')
+    show(dem_array, ax=ax, cmap='terrain')
     
-    # 경로 플롯
+    # 경로 플롯 (DEM 배열의 인덱스를 사용)
     path_x, path_y = zip(*path)
-    path_coords = [dem_transform * (x, y) for x, y in zip(path_y, path_x)]
-    path_x_transformed, path_y_transformed = zip(*path_coords)
-    ax.plot(path_y_transformed, path_x_transformed, marker='o', color='red', linewidth=2, markersize=5, label='Path')
-
-    # 도로 플롯
-    road_coords = np.column_stack(np.where(road_transformed == 1))
-    
-    if road_coords.size > 0:
-        road_coords_transformed = [dem_transform * (x, y) for x, y in road_coords]
-        road_x_transformed, road_y_transformed = zip(*road_coords_transformed)
-        ax.scatter(road_y_transformed, road_x_transformed, color='blue', s=1, label='Roads')
-    else:
-        print("Warning: No road coordinates found in the road_transformed array.")
+    ax.plot(path_y, path_x, marker='o', color='red', linewidth=2, markersize=5, label='Path')
 
     ax.set_title('Path Visualization on DEM')
     ax.legend()
     
     plt.show()
+
 
 
 
