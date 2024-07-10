@@ -23,8 +23,28 @@ def show_path_on_dem(dem_array, path):
     
     plt.show()
 
+def show_path_with_arrows(dem_array, path):
+    '''
+    경로를 DEM 지도 위에 화살표로 시각화하는 함수
+    '''
+    fig, ax = plt.subplots(figsize=(10, 10))
+    show(dem_array, ax=ax, cmap='terrain')
 
+    # 경로 시각화
+    path_x, path_y = zip(*path)
 
+    # 화살표의 방향을 계산
+    dx = np.diff(path_y)
+    dy = np.diff(path_x)
+
+    # 경로 시작점과 화살표 표시
+    ax.quiver(path_y[:-1], path_x[:-1], dx, dy, scale_units='xy', angles='xy', scale=1, color='red', label='Path', headwidth=3, headlength=5)
+    ax.plot(path_y, path_x, 'ro')  # 경로의 각 지점에 점 표시
+
+    ax.set_title('Path Visualization on DEM with Arrows')
+    ax.legend()
+
+    plt.show()
 
 def array_2_plot(array):
     '''
