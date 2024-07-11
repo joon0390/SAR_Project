@@ -7,6 +7,7 @@ road_shp_file = '/Users/heekim/Desktop/heekimjun/WiSAR/data/GIS 데이터_202407
 watershed_basins_shp_file = '/Users/heekim/Desktop/heekimjun/WiSAR/data/GIS 데이터_20240704/watershed/basins_valid.shp'
 channels_shp_file = '/Users/heekim/Desktop/heekimjun/WiSAR/data/GIS 데이터_20240704/watershed/channels.shp'
 q_table_file = '/Users/heekim/Documents/GitHub/SAR_Project/q_table.pkl'
+
 # 하이퍼 파라미터 설정
 alpha = 0.3  # 학습률
 gamma = 0.9  # 할인 인자
@@ -16,3 +17,7 @@ speed = 20  # 이동 속도
 max_steps = 1000  # 최대 스텝 수
 episodes = 1000  # 에피소드 수
 simulation_max_steps = 1000 # 시뮬레이션 최대 스템
+
+target_update = 10
+batch_size = 16
+memory_size=10000

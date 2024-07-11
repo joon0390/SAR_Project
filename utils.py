@@ -136,7 +136,7 @@ if __name__ == '__main__':
 
     from config import *
     dem = dem_path
-    shapefile = rirsv_shp_file
+    shapefile = watershed_basins_shp_file
     print_dem_and_shapefile_values(dem, shapefile)
 
 
