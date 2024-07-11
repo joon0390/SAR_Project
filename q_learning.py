@@ -1,16 +1,26 @@
 import numpy as np
-from modified_utils import get_elevation, calculate_slope
+from utils import get_elevation, calculate_slope
 from config import *
-# 하이퍼 파라미터 설정
-alpha = 0.2  # 학습률
-gamma = 0.9  # 할인 인자
-epsilon = 0.8  # 탐험 vs 활용 비율
-beta = 0.01  # 불확실성에 대한 가중치
+import pickle
+import os
 
-def bayesian_q_learning(dem_array, rirsv_array, wkmstrm_array, road_array, watershed_basins_array, channels_array, reward_calculator):
-    # 베이지안 Q-러닝 파라미터 초기화
-    q_mean = np.zeros((dem_array.shape[0], dem_array.shape[1], 6))  # Q-값의 평균을 저장할 배열 초기화
-    q_variance = np.ones((dem_array.shape[0], dem_array.shape[1], 6))  # Q-값의 분산을 저장할 배열 초기화
+def save_q_table(q_table, filename='q_table.pkl'):
+    with open(filename, 'wb') as f:
+        pickle.dump(q_table, f)
+
+def load_q_table(filename='q_table.pkl'):
+    with open(filename, 'rb') as f:
+        return pickle.load(f)
+
+def bayesian_q_learning(dem_array, rirsv_array, wkmstrm_array, road_array, watershed_basins_array, channels_array, reward_calculator, load_existing=False, q_table_filename=q_table_file):
+    # 베이지안 Q-러닝 파라미터 초기화 또는 기존 Q-테이블 로드
+    if load_existing and os.path.exists(q_table_filename):
+        q_mean, q_variance = load_q_table(q_table_filename)
+        print(f"Loaded existing Q-table from {q_table_filename}")
+    else:
+        q_mean = np.zeros((dem_array.shape[0], dem_array.shape[1], 6))  # Q-값의 평균을 저장할 배열 초기화
+        q_variance = np.ones((dem_array.shape[0], dem_array.shape[1], 6))  # Q-값의 분산을 저장할 배열 초기화
+
     prev_path = []  # 이전 경로를 저장할 리스트 초기화
 
     for episode in range(1000):
@@ -96,7 +106,16 @@ def bayesian_q_learning(dem_array, rirsv_array, wkmstrm_array, road_array, water
 
             if road_array[x, y]:  # 도로에 도달하면 에피소드 완료
                 done = True
+
+        # # 에피소드가 끝난 후 Q-테이블 저장
+        # if episode % 100 == 0:
+        #     save_q_table((q_mean, q_variance), filename='q_table_episode_{}.pkl'.format(episode))
+
         print("쉿 학습중")
+
+    # 최종 Q-테이블 저장
+    save_q_table((q_mean, q_variance), filename=q_table_filename)
+
     return q_mean
 
 def simulate_path(start_x, start_y, q_mean, dem_array, rirsv_array, wkmstrm_array, road_array, watershed_basins_array, channels_array):

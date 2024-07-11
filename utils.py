@@ -100,3 +100,10 @@ def plot_dem_and_shapefile(dem_file_path, shapefile_path, cmap='terrain', shapef
     plt.xlabel('Longitude')
     plt.ylabel('Latitude')
     plt.show()
+
+if __name__ == '__main__':
+    import pickle
+    with open("q_table.pkl","rb") as fr:
+        data = pickle.load(fr)
+
+    print(data)
