@@ -101,9 +101,47 @@ def plot_dem_and_shapefile(dem_file_path, shapefile_path, cmap='terrain', shapef
     plt.ylabel('Latitude')
     plt.show()
 
+def print_dem_and_shapefile_values(dem_file_path, shapefile_path):
+    """
+    DEM 파일과 셰이프파일의 값을 출력하는 함수
+    
+    Parameters:
+    - dem_file_path: str, DEM 파일의 경로
+    - shapefile_path: str, 셰이프파일의 경로
+    """
+    # DEM 파일 읽기
+    with rasterio.open(dem_file_path) as dem_dataset:
+        dem_data = dem_dataset.read(1)
+        dem_transform = dem_dataset.transform
+
+    # 셰이프 파일 읽기
+    shapefile_data = gpd.read_file(shapefile_path)
+
+    # DEM 데이터 출력
+    print("DEM Data:")
+    print(dem_data)
+
+    # 셰이프 파일 데이터 출력
+    print("\nShapefile Data:")
+    print(shapefile_data)
+
 if __name__ == '__main__':
     import pickle
-    with open("q_table.pkl","rb") as fr:
-        data = pickle.load(fr)
+    def load_q_table(file_path):
+        with open(file_path, "rb") as f:
+            q_mean, q_variance = pickle.load(f)
+        return q_mean, q_variance
+    def print_q_values(q_mean, x, y):
+        print(f"Q-Values at ({x}, {y}): {q_mean[x, y]}")
 
-    print(data)
+    from config import *
+    dem = dem_path
+    shapefile = rirsv_shp_file
+    print_dem_and_shapefile_values(dem, shapefile)
+
+
+    q_mean, q_variance = load_q_table("q_table.pkl")
+
+    # 특정 상태의 Q-값 확인 (예: x=100, y=200)
+    x, y = 1000, 300
+    print_q_values(q_mean, x, y)

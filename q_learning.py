@@ -12,6 +12,19 @@ def load_q_table(filename='q_table.pkl'):
     with open(filename, 'rb') as f:
         return pickle.load(f)
 
+'''
+x: 현재 위치의 x 좌표 (DEM 배열에서의 행 인덱스)
+y: 현재 위치의 y 좌표 (DEM 배열에서의 열 인덱스)
+get_elevation(x, y, dem_array): 현재 위치의 고도 값
+calculate_slope(x, y, dem_array): 현재 위치의 경사 값
+rirsv_array[x, y]: 현재 위치에서 강(또는 강) 여부를 나타내는 값
+wkmstrm_array[x, y]: 현재 위치에서 작은 강(또는 개천) 여부를 나타내는 값
+road_array[x, y]: 현재 위치에서 도로 여부를 나타내는 값
+watershed_basins_array[x, y]: 현재 위치에서 유역 분지 여부를 나타내는 값
+channels_array[x, y]: 현재 위치에서 채널 여부를 나타내는 값
+
+state는 총 9개의 요소로 구성된 튜플
+'''
 def bayesian_q_learning(dem_array, rirsv_array, wkmstrm_array, road_array, watershed_basins_array, channels_array, reward_calculator, load_existing=False, q_table_filename=q_table_file):
     # 베이지안 Q-러닝 파라미터 초기화 또는 기존 Q-테이블 로드
     if load_existing and os.path.exists(q_table_filename):
