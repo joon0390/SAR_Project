@@ -20,15 +20,6 @@ class DQN(nn.Module):
         x = self.fc3(x)
         return x
 
-# 하이퍼 파라미터 설정
-alpha = 0.001  # 학습률
-gamma = 0.9  # 할인 인자
-epsilon = 0.8  # 탐험 vs 활용 비율
-beta = 0.01  # 불확실성에 대한 가중치
-replay_buffer = deque(maxlen=10000)
-batch_size = 64
-input_dim = 9  # 상태의 차원
-output_dim = 6  # 행동의 차원
 
 # 모델과 옵티마이저 초기화
 model = DQN(input_dim, output_dim)
