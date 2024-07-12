@@ -21,3 +21,15 @@ simulation_max_steps = 1000 # 시뮬레이션 최대 스템
 target_update = 10
 batch_size = 16
 memory_size=10000
+
+
+#DQN 하이퍼 파라미터
+# # 하이퍼 파라미터 설정
+dqn_alpha = 0.001  # 학습률
+dqn_gamma = 0.9  # 할인 인자
+dqn_epsilon = 0.8  # 탐험 vs 활용 비율
+dqn_beta = 0.01  # 불확실성에 대한 가중치
+dqn_replay_buffer = deque(maxlen=10000)
+dqn_batch_size = 64
+dqn_input_dim = 9  # 상태의 차원
+dqn_output_dim = 6  # 행동의 차원
