@@ -5,9 +5,10 @@ import torch.optim as optim
 from collections import deque
 import random
 from utils import get_elevation, calculate_slope
-from BQL import load_data, shapefile_to_array
+from geo_processing import load_data, shapefile_to_array
 import pickle
 import os
+from reward import RewardCalculator
 
 # 신경망 아키텍처 정의
 class DQN(nn.Module):
@@ -23,7 +24,16 @@ class DQN(nn.Module):
         x = self.fc3(x)
         return x
 
+# 환경 설정 및 초기화
+import config
 
+input_dim = config.INPUT_DIM
+output_dim = config.OUTPUT_DIM
+alpha = config.LEARNING_RATE
+gamma = config.DISCOUNT_FACTOR
+epsilon = config.EPSILON
+batch_size = config.BATCH_SIZE
+replay_buffer = deque(maxlen=config.REPLAY_BUFFER_SIZE)
 
 model = DQN(input_dim, output_dim)
 target_model = DQN(input_dim, output_dim)
@@ -131,7 +141,7 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, road_array, watershed_ba
             torch.save(model.state_dict(), model_filename)
             print(f"Saved model to {model_filename}")
 
-# Load data using functions from BQL.py
+# Load data using functions from geo_processing.py
 area, dem, rirsv, wkmstrm, road, watershed_basins, channels = load_data()
 
 # Convert shapefiles to arrays
@@ -141,11 +151,6 @@ wkmstrm_array = shapefile_to_array(wkmstrm, dem_array, dem.transform)
 road_array = shapefile_to_array(road, dem_array, dem.transform)
 watershed_basins_array = shapefile_to_array(watershed_basins, dem_array, dem.transform)
 channels_array = shapefile_to_array(channels, dem_array, dem.transform)
-
-# Example reward calculator (replace with actual implementation)
-class RewardCalculator:
-    def calculate(self, state, action, next_state):
-        return 1.0  # Placeholder implementation
 
 reward_calculator = RewardCalculator()
 
