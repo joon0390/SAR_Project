@@ -24,31 +24,31 @@ class RewardCalculator:
 
     def reward_function(self, state):
         '''
-        보상함수에 대한 구체적인 명시가 필요
+        보상 함수: 보상 및 패널티를 구체화
         '''
         x, y, elevation, slope, rirsv, wkmstrm, road, watershed_basins, channels = state
+       
+        if rirsv:
+            return -10000
         
         reward = -1  # 기본 패널티
 
         # 도로에 도달하면 높은 보상
         if road:
             reward += 20
-        # 강이나 경사가 큰 지역에 있으면
+        # 강이나 경사가 큰 지역에 있으면 큰 패널티
         if rirsv:
             reward -= 10
         if slope > 0.5:
             reward -= 10
-        # 작은 강(개천) 근처에 있으면
+        # 작은 강(개천) 근처에 있으면 중간 패널티
         if wkmstrm:
             reward += 5
-        # 워터셰드 채널에 있으면
+        # 워터셰드 채널에 있으면 보상
         if channels:
             reward -= 5
 
-        return reward
+        # 이동 거리에 따른 보상/패널티 추가
+        reward -= 0.1 * (abs(state[0] - self.start_x) + abs(state[1] - self.start_y))
 
-def discretize_state(state, q_mean):
-    # 상태를 디스크리트 상태로 변환
-    x, y = state[:2]
-    max_x, max_y = q_mean.shape[0] - 1, q_mean.shape[1] - 1
-    return min(x // 10, max_x), min(y // 10, max_y)
+        return reward

@@ -133,15 +133,3 @@ if __name__ == '__main__':
         return q_mean, q_variance
     def print_q_values(q_mean, x, y):
         print(f"Q-Values at ({x}, {y}): {q_mean[x, y]}")
-
-    from config import *
-    dem = dem_path
-    shapefile = watershed_basins_shp_file
-    print_dem_and_shapefile_values(dem, shapefile)
-
-
-    q_mean, q_variance = load_q_table("q_table.pkl")
-
-    # 특정 상태의 Q-값 확인 (예: x=100, y=200)
-    x, y = 1000, 300
-    print_q_values(q_mean, x, y)
