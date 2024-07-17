@@ -3,25 +3,34 @@ from geo_processing import GISProcessor, load_shapefiles
 from method.q_learning import bayesian_q_learning, simulate_path
 import numpy as np
 from reward import RewardCalculator
-from utils import show_path_with_arrows
+from utils import show_path_with_arrows, load_and_print_npy
+import os
 
 if __name__ == "__main__":
-    # GISProcessor 클래스 인스턴스 생성
-    processor = GISProcessor(dem_path)
+    filename = 'featured_dem.npy'
+    '''
+    slice_range = (slice(110, 120), slice(110, 120), slice(None))  # Example: rows 110-119, columns 110-119, all channels
 
-    # DEM 데이터를 로드
-    dem_array = processor.dem.read(1)
-    dem_transform = processor.dem.transform
-    
-    # shapefiles 로드
-    rirsv, wkmstrm, road, watershed_basins, channels = load_shapefiles(rirsv_shp_file, wkmstrm_shp_file, road_shp_file, watershed_basins_shp_file, channels_shp_file)
+    print(f"Checking {filename}")
+    load_and_print_npy(filename, slice_range)
+    print("\n")
+    '''
+    # .npy 파일을 로드
+    if os.path.exists(filename):
+        combined_array = np.load(filename)
+        print(f"Loaded combined array from {filename}")
+        print(f"Combined array shape: {combined_array.shape}")
+    else:
+        print(f"{filename} does not exist. Please ensure the file is available.")
+        exit(1)
 
-    # 각 shapefile을 변환된 DEM 영역에 맞춰 변환
-    rirsv_transformed = processor.preprocess_rirsv(rirsv) #호수 내부는 0, 외부는 1
-    watershed_basins_transformed = processor.preprocess_watershed(watershed_basins) # 같은 watershed는 0이 아닌 고유한 값, watershed의 경계는 0
-    wkmstrm_transformed = processor.preprocess_wkmstrm(wkmstrm)
-    road_transformed = processor.transform_shapefile_to_dem(road)
-    channels_transformed = processor.transform_shapefile_to_dem(channels)
+    # 채널을 각각 분리
+    dem_array = combined_array[:, :, 0]
+    rirsv_transformed = combined_array[:, :, 1]
+    wkmstrm_transformed = combined_array[:, :, 2]
+    road_transformed = combined_array[:, :, 3]
+    watershed_basins_transformed = combined_array[:, :, 4]
+    channels_transformed = combined_array[:, :, 5]
 
     # RewardCalculator 클래스 인스턴스 생성
     reward_calculator = RewardCalculator(dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed)

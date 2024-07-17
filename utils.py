@@ -6,7 +6,23 @@ import matplotlib.pyplot as plt
 from rasterio.plot import show
 from pyproj import Transformer
 from rasterio.transform import Affine
+import os
 
+def load_and_print_npy(filename, slice_range=None):
+    if os.path.exists(filename):
+        array = np.load(filename)
+        print(f"Array loaded from {filename}")
+        print(f"Array shape: {array.shape}")
+        
+        if slice_range:
+            sliced_array = array[slice_range]
+            print(f"Sliced Array shape: {sliced_array.shape}")
+            print(f"Sliced Array contents:\n{sliced_array}")
+        else:
+            print(f"Array contents:\n{array}")
+    else:
+        print(f"{filename} does not exist.")
+        
 def show_path_on_dem(dem_array, path):
     '''
     경로를 DEM 지도 위에 시각화
