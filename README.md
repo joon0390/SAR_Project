@@ -23,6 +23,8 @@
 
 - Bayesian Q-Learning(BQN)
     https://cdn.aaai.org/AAAI/1998/AAAI98-108.pdf
+- DQN (Deep Q-Network)
+    https://arxiv.org/pdf/1312.5602
 
 ---
 ## How to use

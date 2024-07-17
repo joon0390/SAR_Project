@@ -56,6 +56,8 @@ class GISProcessor:
     def preprocess_watershed(self, shapefile):
         dem_array = np.zeros_like(self.dem_array)
         dem_transform = self.dem_transform
+        dem_array = np.zeros_like(self.dem_array)
+        dem_transform = self.dem_transform
         shapefile_crs = shapefile.crs
         dem_crs = self.dem.crs
         transformer = Transformer.from_crs(shapefile_crs, dem_crs, always_xy=True)
@@ -129,6 +131,25 @@ def load_shapefiles(rirsv_shp_file, wkmstrm_shp_file, road_shp_file, watershed_b
     channels = gpd.read_file(channels_shp_file)
     
     return rirsv, wkmstrm, road, watershed_basins, channels
+
+# Example usage
+if __name__ == "__main__":
+    from config import *
+
+    processor = GISProcessor(dem_path)
+    rirsv, wkmstrm, road, watershed_basins, channels = load_shapefiles(rirsv_shp_file, wkmstrm_shp_file, road_shp_file, watershed_basins_shp_file, channels_shp_file)
+
+    print("Creating featured DEM")
+    featured_dem = processor.create_featured_dem(rirsv, wkmstrm, road, watershed_basins, channels)
+    print("Featured DEM shape:", featured_dem.shape)
+
+    # Save the array
+    save_path = 'featured_dem.npy'
+    processor.save_array(featured_dem, save_path)
+
+    # Load the array
+    loaded_array = processor.load_array(save_path)
+    print("Loaded Array shape:", loaded_array.shape)
 
 # Example usage
 if __name__ == "__main__":
