@@ -4,7 +4,9 @@ import rasterio
 from rasterio.transform import rowcol
 from pyproj import Transformer
 from shapely.geometry import Point, Polygon
+import concurrent.futures
 import os
+import torch 
 
 class GISProcessor:
     def __init__(self, dem_path):
@@ -13,111 +15,93 @@ class GISProcessor:
         self.dem_array = self.dem.read(1)
         self.dem_transform = self.dem.transform
 
+    def _process_geom(self, geom, transformer, dem_transform, array, value, border_value, progress, total_geoms):
+        coords = [(transformer.transform(coord[0], coord[1])) for coord in geom.exterior.coords]
+        poly = Polygon(coords)
+        min_x, min_y, max_x, max_y = poly.bounds
+
+        # 경계와 내부를 동시에 처리
+        for i in range(int(min_y), int(max_y) + 1):
+            for j in range(int(min_x), int(max_x) + 1):
+                px, py = transformer.transform(j, i)
+                point = Point(px, py)
+                row, col = rowcol(dem_transform, px, py)
+                if 0 <= row < array.shape[0] and 0 <= col < array.shape[1]:
+                    if poly.contains(point):
+                        array[row, col] = value
+                    elif poly.touches(point):
+                        array[row, col] = border_value
+
+        progress.value += 1
+        if progress.value % 10 == 0 or progress.value == total_geoms:
+            print(f"Progress: {progress.value / total_geoms * 100:.2f}%")
+
     def transform_shapefile_to_dem(self, shapefile, value=1):
-        dem_array = self.dem_array
+        dem_array = np.zeros_like(self.dem_array)
         dem_transform = self.dem_transform
         shapefile_crs = shapefile.crs
         dem_crs = self.dem.crs
         transformer = Transformer.from_crs(shapefile_crs, dem_crs, always_xy=True)
 
-        array = np.zeros_like(dem_array)
+        progress = torch.tensor(0)
+        total_geoms = len(shapefile.geometry)
 
-        for geom in shapefile.geometry:
-            if geom.geom_type == 'Polygon':
-                coords = [(int(rowcol(dem_transform, *transformer.transform(coord[0], coord[1]))[1]), 
-                           int(rowcol(dem_transform, *transformer.transform(coord[0], coord[1]))[0])) 
-                          for coord in geom.exterior.coords]
-                for y, x in coords:
-                    if 0 <= x < array.shape[0] and 0 <= y < array.shape[1]:
-                        array[x, y] = value
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures = [executor.submit(self._process_geom, geom, transformer, dem_transform, dem_array, value, value, progress, total_geoms) for geom in shapefile.geometry]
+            concurrent.futures.wait(futures)
 
-            elif geom.geom_type == 'MultiPolygon':
-                for poly in geom.geoms:
-                    coords = [(int(rowcol(dem_transform, *transformer.transform(coord[0], coord[1]))[1]), 
-                               int(rowcol(dem_transform, *transformer.transform(coord[0], coord[1]))[0])) 
-                              for coord in poly.exterior.coords]
-                    for y, x in coords:
-                        if 0 <= x < array.shape[0] and 0 <= y < array.shape[1]:
-                            array[x, y] = value
-
-        return array
+        return dem_array
 
     def preprocess_watershed(self, shapefile):
-        dem_array = self.dem_array
+        dem_array = np.zeros_like(self.dem_array)
         dem_transform = self.dem_transform
         shapefile_crs = shapefile.crs
         dem_crs = self.dem.crs
         transformer = Transformer.from_crs(shapefile_crs, dem_crs, always_xy=True)
 
-        array = np.zeros_like(dem_array)
-        unique_value = 1
+        progress = torch.tensor(0)
+        total_geoms = len(shapefile.geometry)
 
-        for geom in shapefile.geometry:
-            if geom.geom_type == 'Polygon':
-                coords = [(transformer.transform(coord[0], coord[1])) for coord in geom.exterior.coords]
-                poly = Polygon(coords)
-                min_x, min_y, max_x, max_y = poly.bounds
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures = [executor.submit(self._process_geom, geom, transformer, dem_transform, dem_array, 1, 0, progress, total_geoms) for geom in shapefile.geometry]
+            concurrent.futures.wait(futures)
 
-                print(f"Processing Polygon with bounds: {min_x}, {min_y}, {max_x}, {max_y}")
-
-                for i in range(int(min_y), int(max_y) + 1):
-                    for j in range(int(min_x), int(max_x) + 1):
-                        px, py = transformer.transform(j, i)
-                        point = Point(px, py)
-                        if poly.contains(point):
-                            row, col = rowcol(dem_transform, px, py)
-                            if 0 <= row < array.shape[0] and 0 <= col < array.shape[1]:
-                                array[row, col] = unique_value
-                                print(f"Setting array[{row}, {col}] = {unique_value}")
-
-                print(f"Completed processing Polygon with unique value {unique_value}")
-                unique_value += 1   
-
-            elif geom.geom_type == 'MultiPolygon':
-                for poly in geom.geoms:
-                    coords = [(transformer.transform(coord[0], coord[1])) for coord in poly.exterior.coords]
-                    poly = Polygon(coords)
-                    min_x, min_y, max_x, max_y = poly.bounds
-
-                    print(f"Processing MultiPolygon with bounds: {min_x}, {min_y}, {max_x}, {max_y}")
-
-                    for i in range(int(min_y), int(max_y) + 1):
-                        for j in range(int(min_x), int(max_x) + 1):
-                            px, py = transformer.transform(j, i)
-                            point = Point(px, py)
-                            if poly.contains(point):
-                                row, col = rowcol(dem_transform, px, py)
-                                if 0 <= row < array.shape[0] and 0 <= col < array.shape[1]:
-                                    array[row, col] = unique_value
-                                    print(f"Setting array[{row}, {col}] = {unique_value}")
-
-                    print(f"Completed processing part of MultiPolygon with unique value {unique_value}")
-                    unique_value += 1
-
-        return array
+        return dem_array
 
     def create_featured_dem(self, rirsv_shapefile, wkmstrm_shapefile, road_shapefile, watershed_shapefile, channels_shapefile):
-        rirsv_array = self.preprocess_rirsv(rirsv_shapefile)
-        wkmstrm_array = self.preprocess_wkmstrm(wkmstrm_shapefile)
-        road_array = self.transform_shapefile_to_dem(road_shapefile, value=3)
-        watershed_array = self.preprocess_watershed(watershed_shapefile)
-        channels_array = self.transform_shapefile_to_dem(channels_shapefile, value=5)
-
-        # 중간 결과 확인
-        print("RIRSV Array:")
-        print(rirsv_array)
-        print("WKSTRM Array:")
-        print(wkmstrm_array)
-        print("Road Array:")
-        print(road_array)
-        print("Watershed Array:")
-        print(watershed_array)
-        print("Channels Array:")
-        print(channels_array)
+        rirsv_array = self.load_or_process_array('rirsv_array', self.preprocess_rirsv, rirsv_shapefile)
+        wkmstrm_array = self.load_or_process_array('wkmstrm_array', self.preprocess_wkmstrm, wkmstrm_shapefile)
+        road_array = self.load_or_process_array('road_array', self.transform_shapefile_to_dem, road_shapefile, 3)
+        watershed_array = self.load_or_process_array('watershed_array', self.preprocess_watershed, watershed_shapefile)
+        channels_array = self.load_or_process_array('channels_array', self.transform_shapefile_to_dem, channels_shapefile, 5)
 
         combined_array = np.stack((self.dem_array, rirsv_array, wkmstrm_array, road_array, watershed_array, channels_array), axis=-1)
 
         return combined_array
+
+    def load_or_process_array(self, base_filename, process_function, *args):
+        arrays = []
+        file_count = 0
+        while os.path.exists(f"{base_filename}_{file_count}.npy"):
+            print(f"Loading existing array from {base_filename}_{file_count}.npy")
+            arrays.append(self.load_array(f"{base_filename}_{file_count}.npy"))
+            file_count += 1
+
+        if not arrays:
+            print(f"Processing and saving array to {base_filename}")
+            array = process_function(*args)
+            self.save_array_in_parts(array, base_filename)
+            arrays = [array]
+
+        return np.concatenate(arrays, axis=0)
+
+    def save_array_in_parts(self, array, base_filename, part_size=1000):
+        total_parts = (array.shape[0] + part_size - 1) // part_size
+        for part in range(total_parts):
+            part_array = array[part * part_size:(part + 1) * part_size]
+            part_filename = f"{base_filename}_{part}.npy"
+            np.save(part_filename, part_array)
+            print(f"Array part saved to {part_filename}")
 
     def preprocess_rirsv(self, shapefile):
         print("Preprocessing rirsv shapefile...")
@@ -158,6 +142,7 @@ if __name__ == "__main__":
     processor = GISProcessor(dem_path)
     rirsv, wkmstrm, road, watershed_basins, channels = load_shapefiles(rirsv_shp_file, wkmstrm_shp_file, road_shp_file, watershed_basins_shp_file, channels_shp_file)
 
+    print("Creating featured DEM")
     featured_dem = processor.create_featured_dem(rirsv, wkmstrm, road, watershed_basins, channels)
     print("Featured DEM shape:", featured_dem.shape)
 
