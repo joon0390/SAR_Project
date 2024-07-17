@@ -26,6 +26,8 @@ channels_array[x, y]: 현재 위치에서 채널 여부를 나타내는 값
 state는 총 9개의 요소로 구성된 튜플
 '''
 def bayesian_q_learning(dem_array, rirsv_array, wkmstrm_array, road_array, watershed_basins_array, channels_array, reward_calculator, load_existing=False, q_table_filename=q_table_file):
+    global epsilon  # 전역 변수 선언
+
     # 베이지안 Q-러닝 파라미터 초기화 또는 기존 Q-테이블 로드
     if load_existing and os.path.exists(q_table_filename):
         q_mean, q_variance = load_q_table(q_table_filename)
@@ -36,7 +38,12 @@ def bayesian_q_learning(dem_array, rirsv_array, wkmstrm_array, road_array, water
 
     prev_path = []  # 이전 경로를 저장할 리스트 초기화
 
-    for episode in range(1000):
+    epsilon_start = epsilon  # 시작 시 탐험 비율
+    epsilon_end = 0.1  # 최종 탐험 비율
+    epsilon_decay = 0.995  # 탐험 비율 감소율
+    epsilon = epsilon_start
+
+    for episode in range(episodes):
         # 에피소드 초기 상태 무작위 설정
         x, y = np.random.randint(1, dem_array.shape[0] - 1), np.random.randint(1, dem_array.shape[1] - 1)
         reward_calculator.start_x, reward_calculator.start_y = x, y  # 시작 좌표 저장
@@ -48,7 +55,7 @@ def bayesian_q_learning(dem_array, rirsv_array, wkmstrm_array, road_array, water
         step = 0  # 현재 에피소드의 스텝 수
         prev_path.append((x, y))  # 초기 좌표를 이전 경로에 추가
         
-        while not done and step < 1000:
+        while not done and step < max_steps:
             # Epsilon-Greedy 정책으로 행동 선택
             if np.random.uniform(0, 1) < epsilon:
                 action = np.random.randint(6)  # 탐험: 무작위로 행동 선택
@@ -59,29 +66,29 @@ def bayesian_q_learning(dem_array, rirsv_array, wkmstrm_array, road_array, water
             # 행동에 따른 다음 상태 결정
             next_x, next_y = x, y
             if action == 0:  # 무작위 걷기 (Random Walking, RW)
-                next_x, next_y = (x + np.random.choice([-10, 10]), y + np.random.choice([-10, 10]))
+                next_x, next_y = (x + np.random.choice([-speed, speed]), y + np.random.choice([-speed, speed]))
             elif action == 1:  # 경로 여행 (Route Traveling, RT)
                 if road_array[x, y]:
-                    next_x, next_y = (x + np.random.choice([-10, 10]), y)
+                    next_x, next_y = (x + np.random.choice([-speed, speed]), y)
                 else:
-                    next_x, next_y = (x, y + np.random.choice([-10, 10]))
+                    next_x, next_y = (x, y + np.random.choice([-speed, speed]))
             elif action == 2:  # 방향 여행 (Direction Traveling, DT)
                 direction = np.random.choice(['up', 'down', 'left', 'right'])
                 if direction == 'up':
-                    next_x, next_y = (max(1, x - 1), y)
+                    next_x, next_y = (max(1, x - speed), y)
                 elif direction == 'down':
-                    next_x, next_y = (min(dem_array.shape[0] - 2, x + 1), y)
+                    next_x, next_y = (min(dem_array.shape[0] - 2, x + speed), y)
                 elif direction == 'left':
-                    next_x, next_y = (x, max(1, y - 1))
+                    next_x, next_y = (x, max(1, y - speed))
                 elif direction == 'right':
-                    next_x, next_y = (x, min(dem_array.shape[1] - 2, y + 1))
+                    next_x, next_y = (x, min(dem_array.shape[1] - 2, y + speed))
             elif action == 3:  # 제자리에 머무르기 (Staying Put, SP)
                 next_x, next_y = x, y
             elif action == 4:  # 시야 확보 (View Enhancing, VE)
                 highest_elevation = get_elevation(x, y, dem_array)
                 highest_coord = (x, y)
-                for i in range(-1, 2):
-                    for j in range(-1, 2):
+                for i in range(-speed, speed + 1):
+                    for j in range(-speed, speed + 1):
                         if 0 <= x + i < dem_array.shape[0] and 0 <= y + j < dem_array.shape[1]:
                             elevation = get_elevation(x + i, y + j, dem_array)
                             if elevation > highest_elevation:
@@ -117,14 +124,11 @@ def bayesian_q_learning(dem_array, rirsv_array, wkmstrm_array, road_array, water
 
             step += 1  # 스텝 수 증가
 
-            if road_array[x, y]:  # 도로에 도달하면 에피소드 완료
+            # 에피소드 종료 조건을 수정하여 더 넓은 지역 탐색 유도
+            if road_array[x, y] or step >= max_steps:  # 도로에 도달하거나 최대 스텝에 도달하면 에피소드 완료
                 done = True
 
-        # # 에피소드가 끝난 후 Q-테이블 저장
-        # if episode % 100 == 0:
-        #     save_q_table((q_mean, q_variance), filename='q_table_episode_{}.pkl'.format(episode))
-
-        print("쉿 학습중")
+        epsilon = max(epsilon_end, epsilon * epsilon_decay)  # 탐험 비율 감소
 
     # 최종 Q-테이블 저장
     save_q_table((q_mean, q_variance), filename=q_table_filename)
