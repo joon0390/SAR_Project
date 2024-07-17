@@ -6,7 +6,7 @@ from pyproj import Transformer
 from shapely.geometry import Point, Polygon
 import concurrent.futures
 import os
-import torch 
+import multiprocessing
 
 class GISProcessor:
     def __init__(self, dem_path):
@@ -32,9 +32,10 @@ class GISProcessor:
                     elif poly.touches(point):
                         array[row, col] = border_value
 
-        progress.value += 1
-        if progress.value % 10 == 0 or progress.value == total_geoms:
-            print(f"Progress: {progress.value / total_geoms * 100:.2f}%")
+        with progress.get_lock():
+            progress.value += 1
+            if progress.value % 10 == 0 or progress.value == total_geoms:
+                print(f"Progress: {progress.value / total_geoms * 100:.2f}%")
 
     def transform_shapefile_to_dem(self, shapefile, value=1):
         dem_array = np.zeros_like(self.dem_array)
@@ -43,10 +44,10 @@ class GISProcessor:
         dem_crs = self.dem.crs
         transformer = Transformer.from_crs(shapefile_crs, dem_crs, always_xy=True)
 
-        progress = torch.tensor(0)
+        progress = multiprocessing.Value('i', 0)
         total_geoms = len(shapefile.geometry)
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
+        with concurrent.futures.ProcessPoolExecutor() as executor:
             futures = [executor.submit(self._process_geom, geom, transformer, dem_transform, dem_array, value, value, progress, total_geoms) for geom in shapefile.geometry]
             concurrent.futures.wait(futures)
 
@@ -59,49 +60,35 @@ class GISProcessor:
         dem_crs = self.dem.crs
         transformer = Transformer.from_crs(shapefile_crs, dem_crs, always_xy=True)
 
-        progress = torch.tensor(0)
+        progress = multiprocessing.Value('i', 0)
         total_geoms = len(shapefile.geometry)
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
+        with concurrent.futures.ProcessPoolExecutor() as executor:
             futures = [executor.submit(self._process_geom, geom, transformer, dem_transform, dem_array, 1, 0, progress, total_geoms) for geom in shapefile.geometry]
             concurrent.futures.wait(futures)
 
         return dem_array
 
     def create_featured_dem(self, rirsv_shapefile, wkmstrm_shapefile, road_shapefile, watershed_shapefile, channels_shapefile):
-        rirsv_array = self.load_or_process_array('rirsv_array', self.preprocess_rirsv, rirsv_shapefile)
-        wkmstrm_array = self.load_or_process_array('wkmstrm_array', self.preprocess_wkmstrm, wkmstrm_shapefile)
-        road_array = self.load_or_process_array('road_array', self.transform_shapefile_to_dem, road_shapefile, 3)
-        watershed_array = self.load_or_process_array('watershed_array', self.preprocess_watershed, watershed_shapefile)
-        channels_array = self.load_or_process_array('channels_array', self.transform_shapefile_to_dem, channels_shapefile, 5)
+        rirsv_array = self.load_or_process_array('rirsv_array.npy', self.preprocess_rirsv, rirsv_shapefile)
+        wkmstrm_array = self.load_or_process_array('wkmstrm_array.npy', self.preprocess_wkmstrm, wkmstrm_shapefile)
+        road_array = self.load_or_process_array('road_array.npy', self.transform_shapefile_to_dem, road_shapefile, 3)
+        watershed_array = self.load_or_process_array('watershed_array.npy', self.preprocess_watershed, watershed_shapefile)
+        channels_array = self.load_or_process_array('channels_array.npy', self.transform_shapefile_to_dem, channels_shapefile, 5)
 
         combined_array = np.stack((self.dem_array, rirsv_array, wkmstrm_array, road_array, watershed_array, channels_array), axis=-1)
 
         return combined_array
 
-    def load_or_process_array(self, base_filename, process_function, *args):
-        arrays = []
-        file_count = 0
-        while os.path.exists(f"{base_filename}_{file_count}.npy"):
-            print(f"Loading existing array from {base_filename}_{file_count}.npy")
-            arrays.append(self.load_array(f"{base_filename}_{file_count}.npy"))
-            file_count += 1
-
-        if not arrays:
-            print(f"Processing and saving array to {base_filename}")
+    def load_or_process_array(self, filename, process_function, *args):
+        if os.path.exists(filename):
+            print(f"Loading existing array from {filename}")
+            array = self.load_array(filename)
+        else:
+            print(f"Processing and saving array to {filename}")
             array = process_function(*args)
-            self.save_array_in_parts(array, base_filename)
-            arrays = [array]
-
-        return np.concatenate(arrays, axis=0)
-
-    def save_array_in_parts(self, array, base_filename, part_size=1000):
-        total_parts = (array.shape[0] + part_size - 1) // part_size
-        for part in range(total_parts):
-            part_array = array[part * part_size:(part + 1) * part_size]
-            part_filename = f"{base_filename}_{part}.npy"
-            np.save(part_filename, part_array)
-            print(f"Array part saved to {part_filename}")
+            self.save_and_check_array(array, filename)
+        return array
 
     def preprocess_rirsv(self, shapefile):
         print("Preprocessing rirsv shapefile...")
@@ -116,6 +103,14 @@ class GISProcessor:
         print("Transformed WKSTRM Array:")
         print(transformed_array)
         return transformed_array
+
+    def save_and_check_array(self, array, filename):
+        np.save(filename, array)
+        print(f"Array saved to {filename}")
+        loaded_array = np.load(filename)
+        print(f"Array loaded from {filename}")
+        print(f"Loaded array shape: {loaded_array.shape}")
+        return loaded_array
 
     def save_array(self, array, filename):
         np.save(filename, array)
