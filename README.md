@@ -8,7 +8,7 @@
     - GIS 데이터 처리 관련 함수 및 클래스
     - Feature들을 포함하는 Map을 생성
 - q_learning.py 
-    - 강화학습 알고리즘 구현
+    - Bayesian Q-Learning 강화학습 알고리즘 
 - main.py 
     - 메인 실행 파일
 - README.md
