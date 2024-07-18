@@ -90,7 +90,6 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, road_array, watershed_ba
                     next_x, next_y = (x + speed, y - speed)
                 elif action == 7:  # 우하
                     next_x, next_y = (x + speed, y + speed)
-
             elif action_mode == 'custom':
                 if action == 0:  # 무작위 걷기 (Random Walking, RW)
                     next_x, next_y = (x + np.random.choice([-speed, speed]), y + np.random.choice([-speed, speed]))
@@ -152,6 +151,8 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, road_array, watershed_ba
             x, y = next_x, next_y
             prev_path.append((x, y))
 
+            reward_calculator.update_visited_count(x, y)  # 방문 횟수 업데이트
+
             if step % 10 == 0:
                 with torch.no_grad():
                     expected_reward = torch.max(model(state)).item()
@@ -201,7 +202,6 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
                 next_x, next_y = (x + 1, y - 1)
             elif action == 7:
                 next_x, next_y = (x + 1, y + 1)
-
         elif action_mode == 'custom':
             if action == 0:  # 무작위 걷기 (Random Walking, RW)
                 next_x, next_y = (x + np.random.choice([-1, 1]), y + np.random.choice([-1, 1]))
@@ -219,7 +219,7 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
                 elif direction == 'left':
                     next_x, next_y = (x, max(1, y - 1))
                 elif direction == 'right':
-                    next_x, next_y = (x, min(dem_array.shape[1] - 2, y + 1))
+                    next_x, next_y = (x, min(y + 1, dem_array.shape[1] - 1))
             elif action == 3:  # 제자리에 머무르기 (Staying Put, SP)
                 next_x, next_y = x, y
             elif action == 4:  # 시야 확보 (View Enhancing, VE)
@@ -249,3 +249,39 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
             break
 
     return path
+
+if __name__ == "__main__":
+    filename = 'featured_dem.npy'
+
+    # .npy 파일을 로드
+    if os.path.exists(filename):
+        combined_array = np.load(filename)
+        print(f"Loaded combined array from {filename}")
+        print(f"Combined array shape: {combined_array.shape}")
+    else:
+        print(f"{filename} does not exist. Please ensure the file is available.")
+        exit(1)
+
+    # 채널을 각각 분리
+    dem_array = combined_array[:, :, 0]
+    rirsv_transformed = combined_array[:, :, 1]
+    wkmstrm_transformed = combined_array[:, :, 2]
+    road_transformed = combined_array[:, :, 3]
+    watershed_basins_transformed = combined_array[:, :, 4]
+    channels_transformed = combined_array[:, :, 5]
+
+    # 보상 계산기 인스턴스 생성
+    reward_calculator = RewardCalculator(dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed)
+    
+    # DQN 학습 수행
+    dqn_learning(dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed, reward_calculator, action_mode='custom')
+
+    # 경로 시뮬레이션 예시
+    start_x, start_y = 100, 100
+    model = load_model('dqn_model.pth', input_dim=9, output_dim=8)
+    path = simulate_path(start_x, start_y, model, dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed, action_mode='custom')
+    
+    print("Simulated Path:")
+    print(path)
+
+    show_path_with_arrows(dem_array, path)

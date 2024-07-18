@@ -13,7 +13,7 @@ if __name__ == "__main__":
     if os.path.exists(filename):
         combined_array = np.load(filename)
         print(f"Loaded combined array from {filename}")
-        print(f"Combined array shape: {filename}")
+        print(f"Combined array shape: {combined_array.shape}")
     else:
         print(f"{filename} does not exist. Please ensure the file is available.")
         exit(1)
@@ -29,12 +29,13 @@ if __name__ == "__main__":
     # 보상 계산기 인스턴스 생성
     reward_calculator = RewardCalculator(dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed)
     
+    action_mode = 'custom'  # or '8_directions'
+
     # DQN 학습 수행
-    action_mode = '8_directions'  # 또는 'custom'
     dqn_learning(dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed, reward_calculator, action_mode=action_mode)
 
     # 경로 시뮬레이션 예시
-    start_x, start_y = 3500, 2000
+    start_x, start_y = 100, 100
     model = load_model('dqn_model.pth', input_dim=9, output_dim=8 if action_mode == '8_directions' else 6)
     path = simulate_path(start_x, start_y, model, dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed, action_mode=action_mode)
     

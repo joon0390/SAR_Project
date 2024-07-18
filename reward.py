@@ -28,6 +28,9 @@ class RewardCalculator:
         slope = np.sqrt(dzdx**2 + dzdy**2)
         return slope
 
+    def update_visited_count(self, x, y):
+        self.visited_count[(x, y)] += 1
+
     def reward_function(self, state):
         '''
         보상 함수: 보상 및 패널티를 구체화
@@ -48,10 +51,10 @@ class RewardCalculator:
             reward -= 10
 
         if slope > 0.5:
-            reward -= 5
+            reward -= 10
 
         if slope <= 0.5:
-            reward += 5
+            reward += 10
 
         # 작은 강(개천) 근처에 있으면 중간 패널티
         if wkmstrm:
@@ -59,14 +62,14 @@ class RewardCalculator:
 
         # 워터셰드 채널에 있으면 보상
         if channels:
-            reward += 5
+            reward -= 5
 
         # 워터셰드 경계에 있으면 패널티
         if watershed_basins:
-            reward -= 10
+            reward -= 5
 
         # 이동 거리에 따른 보상/패널티 추가
-        reward -= 0.1 * (abs(state[0] - self.start_x) + abs(state[1] - self.start_y))
+        #reward -= 0.1 * (abs(state[0] - self.start_x) + abs(state[1] - self.start_y))
 
         # 버퍼에 현재 상태 추가
         self.state_buffer.append(state)
@@ -79,41 +82,41 @@ class RewardCalculator:
                 
                 # 1. 연속적으로 고도가 낮아진 경우 보상
                 if prev_state[2] > curr_state[2]:
-                    reward += 1
+                    reward += 5
                 
                 # 2. 연속적으로 road를 따라간 경우 보상
                 if prev_state[6] and curr_state[6]:
-                    reward += 5
+                    reward += 10
                 
                 # 3. 이전 timestep과 달리 watershed의 경계에 도달한 경우 패널티
                 if not prev_state[7] and curr_state[7]:
-                    reward -= 5
+                    reward -= 10
                 
                 # 4. 경사가 연속적으로 커질때 패널티
                 if prev_state[3] < curr_state[3]:
-                    reward -= 1
+                    reward -= 5
                 
                 # 5. 경사가 연속적으로 완만해질 때 보상
                 if prev_state[3] > curr_state[3]:
-                    reward += 1
+                    reward += 5
                 
                 # 6. 연속적으로 wkmstrm에 머무를때 패널티
                 if prev_state[5] and curr_state[5]:
-                    reward -= 5
+                    reward -= 10
                 
                 # 특정 상태에서 벗어나는 경우 추가 보상
                 if prev_state[4] and not curr_state[4]:  # rirsv에서 벗어난 경우
-                    reward += 10
+                    reward += 100
                 if prev_state[5] and not curr_state[5]:  # wkmstrm에서 벗어난 경우
-                    reward += 1
-                if not prev_state[6] and curr_state[6]:  # road에 도달한 경우
                     reward += 10
+                if not prev_state[6] and curr_state[6]:  # road에 도달한 경우
+                    reward += 50
                 if prev_state[8] and not curr_state[8]:  # channels에서 벗어난 경우
-                    reward += 1
+                    reward += 5
 
-        # 이미 방문한 위치에 대해 패널티 추가
-        self.visited_count[(x, y)] += 1
-        if self.visited_count[(x, y)] > 1:
-            reward -= 10 * self.visited_count[(x, y)]  # 방문 횟수에 따라 패널티 증가
+        # 방문한 좌표에 대한 패널티 추가
+        visit_count = self.visited_count[(x, y)]
+        if visit_count > 0:
+            reward -= visit_count * 10  # 방문 횟수에 따른 패널티
 
         return reward
