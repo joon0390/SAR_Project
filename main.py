@@ -7,14 +7,8 @@ from utils import show_path_with_arrows, load_and_print_npy
 import os
 
 if __name__ == "__main__":
-    filename = 'featured_dem.npy'
-    '''
-    slice_range = (slice(110, 120), slice(110, 120), slice(None))  # Example: rows 110-119, columns 110-119, all channels
+    filename = '/Users/heekim/Documents/GitHub/SAR_Project/featured_dem.npy'
 
-    print(f"Checking {filename}")
-    load_and_print_npy(filename, slice_range)
-    print("\n")
-    '''
     # .npy 파일을 로드
     if os.path.exists(filename):
         combined_array = np.load(filename)
@@ -36,7 +30,7 @@ if __name__ == "__main__":
     reward_calculator = RewardCalculator(dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed)
 
     # Q-러닝 수행
-    q_mean = bayesian_q_learning(dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed, reward_calculator)
+    q_mean, q_variance = bayesian_q_learning(dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed, reward_calculator)
     
     # 경로 시뮬레이션
     start_x, start_y = np.random.randint(1, dem_array.shape[0] - 1), np.random.randint(1, dem_array.shape[1] - 1)

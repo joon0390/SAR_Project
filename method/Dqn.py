@@ -8,7 +8,7 @@ import os
 
 # DQN 모델 정의
 class DQN(nn.Module):
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, input_dim=9, output_dim=6):
         super(DQN, self).__init__()
         self.fc1 = nn.Linear(input_dim, 24)
         self.fc2 = nn.Linear(24, 24)
@@ -50,9 +50,10 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, road_array, watershed_ba
     for episode in range(episodes):
         x, y = np.random.randint(1, dem_array.shape[0] - 1), np.random.randint(1, dem_array.shape[1] - 1)
         reward_calculator.start_x, reward_calculator.start_y = x, y
-        state = torch.tensor([x, y, get_elevation(x, y, dem_array), calculate_slope(x, y, dem_array),
+        state = torch.tensor([x, y, get_elevation(dem_array[:, :], x, y), calculate_slope(dem_array[:, :], x, y),
                               rirsv_array[x, y], wkmstrm_array[x, y], road_array[x, y],
                               watershed_basins_array[x, y], channels_array[x, y]], dtype=torch.float32)
+        reward_calculator.state_buffer.clear()  # 에피소드 시작 시 버퍼 초기화
         done = False
         step = 0
         prev_path = [(x, y)]
@@ -86,12 +87,12 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, road_array, watershed_ba
             elif action == 3:
                 next_x, next_y = x, y
             elif action == 4:
-                highest_elevation = get_elevation(x, y, dem_array)
+                highest_elevation = get_elevation(dem_array[:, :], x, y)
                 highest_coord = (x, y)
                 for i in range(-speed, speed + 1):
                     for j in range(-speed, speed + 1):
                         if 0 <= x + i < dem_array.shape[0] and 0 <= y + j < dem_array.shape[1]:
-                            elevation = get_elevation(x + i, y + j, dem_array)
+                            elevation = get_elevation(dem_array[:, :], x + i, y + j)
                             if elevation > highest_elevation:
                                 highest_elevation = elevation
                                 highest_coord = (x + i, y + j)
@@ -102,7 +103,7 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, road_array, watershed_ba
             next_x = min(max(next_x, 0), dem_array.shape[0] - 1)
             next_y = min(max(next_y, 0), dem_array.shape[1] - 1)
 
-            next_state = torch.tensor([next_x, next_y, get_elevation(next_x, next_y, dem_array), calculate_slope(next_x, next_y, dem_array),
+            next_state = torch.tensor([next_x, next_y, get_elevation(dem_array[:, :], next_x, next_y), calculate_slope(dem_array[:, :], next_x, next_y),
                                        rirsv_array[next_x, next_y], wkmstrm_array[next_x, next_y], road_array[next_x, next_y],
                                        watershed_basins_array[next_x, next_y], channels_array[next_x, next_y]], dtype=torch.float32)
 
@@ -148,7 +149,7 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
     max_steps = simulation_max_steps
 
     for step in range(max_steps):
-        state = torch.tensor([x, y, get_elevation(x, y, dem_array), calculate_slope(x, y, dem_array),
+        state = torch.tensor([x, y, get_elevation(dem_array[:, :], x, y), calculate_slope(dem_array[:, :], x, y),
                               rirsv_array[x, y], wkmstrm_array[x, y], road_array[x, y],
                               watershed_basins_array[x, y], channels_array[x, y]], dtype=torch.float32)
         with torch.no_grad():
@@ -179,7 +180,7 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
             for i in range(-1, 2):
                 for j in range(-1, 2):
                     if 0 <= x + i < dem_array.shape[0] and 0 <= y + j < dem_array.shape[1]:
-                        elevation = get_elevation(x + i, y + j, dem_array)
+                        elevation = get_elevation(dem_array[:, :, 0], x + i, y + j)
                         if elevation > highest_elevation:
                             highest_elevation = elevation
                             highest_coord = (x + i, y + j)
