@@ -74,14 +74,14 @@ def array_2_plot(array):
 
 def get_elevation(x, y, dem_array):
     # 주어진 좌표의 고도 값 반환
-    return dem_array[x, y]
+    return dem_array[x, y, 0]
 
-def calculate_slope(x, y, dem_array):
+def calculate_slope(dem_array, x, y):
     # 주어진 좌표의 경사 값 계산
     if x <= 0 or x >= dem_array.shape[0] - 1 or y <= 0 or y >= dem_array.shape[1] - 1:
         return 0  # 경계 조건에서 경사는 0으로 설정
-    dzdx = (dem_array[x + 1, y] - dem_array[x - 1, y]) / 2  # x 방향의 경사도 계산
-    dzdy = (dem_array[x, y + 1] - dem_array[x, y - 1]) / 2  # y 방향의 경사도 계산
+    dzdx = (dem_array[x + 1, y, 0] - dem_array[x - 1, y, 0]) / 2  # x 방향의 경사도 계산
+    dzdy = (dem_array[x, y + 1, 0] - dem_array[x, y - 1, 0]) / 2  # y 방향의 경사도 계산
     slope = np.sqrt(dzdx**2 + dzdy**2)  # 경사도 계산
     return slope
 
@@ -142,10 +142,12 @@ def print_dem_and_shapefile_values(dem_file_path, shapefile_path):
     print(shapefile_data)
 
 if __name__ == '__main__':
-    import pickle
-    def load_q_table(file_path):
-        with open(file_path, "rb") as f:
-            q_mean, q_variance = pickle.load(f)
-        return q_mean, q_variance
-    def print_q_values(q_mean, x, y):
-        print(f"Q-Values at ({x}, {y}): {q_mean[x, y]}")
+    filename = '/Users/heekim/Documents/GitHub/SAR_Project/featured_dem.npy'
+
+    # .npy 파일을 로드
+    if os.path.exists(filename):
+        combined_array = np.load(filename)
+        print(f"Loaded combined array from {filename}")
+        print(f"Combined array shape: {combined_array.shape}")
+   
+   
