@@ -13,7 +13,7 @@ if __name__ == "__main__":
     if os.path.exists(filename):
         combined_array = np.load(filename)
         print(f"Loaded combined array from {filename}")
-        print(f"Combined array shape: {combined_array.shape}")
+        print(f"Combined array shape: {filename}")
     else:
         print(f"{filename} does not exist. Please ensure the file is available.")
         exit(1)
@@ -30,14 +30,15 @@ if __name__ == "__main__":
     reward_calculator = RewardCalculator(dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed)
     
     # DQN 학습 수행
-    dqn_learning(dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed, reward_calculator)
+    action_mode = '8_directions'  # 또는 'custom'
+    dqn_learning(dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed, reward_calculator, action_mode=action_mode)
 
     # 경로 시뮬레이션 예시
     start_x, start_y = 3500, 2000
-    model = load_model('dqn_model.pth', input_dim=9, output_dim=6)
-    path = simulate_path(start_x, start_y, model, dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed)
+    model = load_model('dqn_model.pth', input_dim=9, output_dim=8 if action_mode == '8_directions' else 6)
+    path = simulate_path(start_x, start_y, model, dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed, action_mode=action_mode)
     
     print("Simulated Path:")
     print(path)
 
-    show_path_with_arrows(dem_array[:, :], path)
+    show_path_with_arrows(dem_array, path)
