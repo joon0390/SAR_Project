@@ -72,18 +72,19 @@ def array_2_plot(array):
     ax.set_title('Array Visualization')
     plt.show()
 
-def get_elevation(x, y, dem_array):
-    # 주어진 좌표의 고도 값 반환
-    return dem_array[x, y, 0]
+def get_elevation(dem_array, x, y):
+    # 주어진 좌표의 고도 값 반환 (첫 번째 채널 사용)
+    return dem_array[x, y]
 
 def calculate_slope(dem_array, x, y):
-    # 주어진 좌표의 경사 값 계산
+    # 주어진 좌표의 경사 값 계산 (첫 번째 채널 사용)
     if x <= 0 or x >= dem_array.shape[0] - 1 or y <= 0 or y >= dem_array.shape[1] - 1:
         return 0  # 경계 조건에서 경사는 0으로 설정
-    dzdx = (dem_array[x + 1, y, 0] - dem_array[x - 1, y, 0]) / 2  # x 방향의 경사도 계산
-    dzdy = (dem_array[x, y + 1, 0] - dem_array[x, y - 1, 0]) / 2  # y 방향의 경사도 계산
+    dzdx = (dem_array[x + 1, y] - dem_array[x - 1, y]) / 2  # x 방향의 경사도 계산
+    dzdy = (dem_array[x, y + 1] - dem_array[x, y - 1]) / 2  # y 방향의 경사도 계산
     slope = np.sqrt(dzdx**2 + dzdy**2)  # 경사도 계산
     return slope
+
 
 def plot_dem_and_shapefile(dem_file_path, shapefile_path, cmap='terrain', shapefile_color='red'):
     """
