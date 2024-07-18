@@ -1,10 +1,10 @@
-from config import *
-from geo_processing import GISProcessor, load_shapefiles
-from method.q_learning import bayesian_q_learning, simulate_path
-import numpy as np
-from reward import RewardCalculator
-from utils import show_path_with_arrows, load_and_print_npy
 import os
+import numpy as np
+from geo_processing import GISProcessor, load_shapefiles
+from reward import RewardCalculator
+from method.Dqn import DQN, dqn_learning, simulate_path, load_model, Agent
+from config import *
+from utils import show_path_with_arrows
 
 if __name__ == "__main__":
     filename = '/Users/heekim/Documents/GitHub/SAR_Project/featured_dem.npy'
@@ -18,7 +18,7 @@ if __name__ == "__main__":
         print(f"{filename} does not exist. Please ensure the file is available.")
         exit(1)
 
-    # 채널을 각각 분리
+     # 채널을 각각 분리
     dem_array = combined_array[:, :, 0]
     rirsv_transformed = combined_array[:, :, 1]
     wkmstrm_transformed = combined_array[:, :, 2]
@@ -26,21 +26,21 @@ if __name__ == "__main__":
     watershed_basins_transformed = combined_array[:, :, 4]
     channels_transformed = combined_array[:, :, 5]
 
-    # RewardCalculator 클래스 인스턴스 생성
+    # 보상 계산기 인스턴스 생성
     reward_calculator = RewardCalculator(dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed)
-
-    # Q-러닝 수행
-    q_mean, q_variance = bayesian_q_learning(dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed, reward_calculator)
     
-    # 경로 시뮬레이션
-    start_x, start_y = np.random.randint(1, dem_array.shape[0] - 1), np.random.randint(1, dem_array.shape[1] - 1)
-    path = simulate_path(start_x, start_y, q_mean, dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed)
+    # Agent 인스턴스 생성
+    agent = Agent(age_group='young', gender='male', health_status='good')
+    
+    # DQN 학습 수행
+    dqn_learning(dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed, reward_calculator, agent, action_mode='custom')
 
-    # 경로 출력
-    print("Path taken by the agent:")
+    # 경로 시뮬레이션 예시
+    start_x, start_y = 100, 100
+    model = load_model('dqn_model.pth', input_dim=9, output_dim=8)
+    path = simulate_path(start_x, start_y, model, dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed, agent, action_mode='custom')
+    
+    print("Simulated Path:")
     print(path)
-    
-    print("finished")
 
-    # 경로를 DEM 위에 화살표로 시각화
     show_path_with_arrows(dem_array, path)

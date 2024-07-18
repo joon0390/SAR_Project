@@ -11,7 +11,7 @@ class RewardCalculator:
         self.channels_array = channels_array
         self.current_watershed = None
         self.state_buffer = deque(maxlen=5)  # 최근 5개의 state를 저장할 버퍼
-        self.visited_count = defaultdict(int)  # 방문한 좌표와 그 횟수를 저장할 딕셔너리
+        self.visited_count = defaultdict(int)  # 방문 횟수를 저장할 딕셔너리
         self.start_x = 0
         self.start_y = 0
 
@@ -27,9 +27,6 @@ class RewardCalculator:
         dzdy = (self.dem_array[x, y + 1] - self.dem_array[x, y - 1]) / 2
         slope = np.sqrt(dzdx**2 + dzdy**2)
         return slope
-
-    def update_visited_count(self, x, y):
-        self.visited_count[(x, y)] += 1
 
     def reward_function(self, state):
         '''
@@ -68,8 +65,11 @@ class RewardCalculator:
         if watershed_basins:
             reward -= 5
 
+        # 방문 횟수에 따른 패널티 추가
+        reward -= self.visited_count[(x, y)] * 10
+
         # 이동 거리에 따른 보상/패널티 추가
-        #reward -= 0.1 * (abs(state[0] - self.start_x) + abs(state[1] - self.start_y))
+        reward -= 0.1 * (abs(state[0] - self.start_x) + abs(state[1] - self.start_y))
 
         # 버퍼에 현재 상태 추가
         self.state_buffer.append(state)
@@ -114,9 +114,7 @@ class RewardCalculator:
                 if prev_state[8] and not curr_state[8]:  # channels에서 벗어난 경우
                     reward += 5
 
-        # 방문한 좌표에 대한 패널티 추가
-        visit_count = self.visited_count[(x, y)]
-        if visit_count > 0:
-            reward -= visit_count * 10  # 방문 횟수에 따른 패널티
-
         return reward
+
+    def update_visited_count(self, x, y):
+        self.visited_count[(x, y)] += 1
