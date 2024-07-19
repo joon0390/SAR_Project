@@ -4,27 +4,38 @@ import torch.nn as nn
 import torch.optim as optim
 from utils import get_elevation, calculate_slope
 from config import *
-from collections import defaultdict
+from collections import defaultdict  # 추가
 import os
 
 class Agent:
-    def __init__(self, age_group, gender, health_status):
+    def __init__(self, age_group='young', gender='male', health_status='good'):
         self.age_group = age_group
         self.gender = gender
         self.health_status = health_status
-        self.speed = self.get_speed()
-        self.explore_rate = self.get_explore_rate()
-        self.stay_put_prob = self.get_stay_put_prob()
+        self.set_attributes()
 
-    def get_speed(self):
-        return agent_config[f"{self.age_group}_{self.gender}_{self.health_status}"]['speed']
+    def set_attributes(self):
+        if self.age_group == 'young':
+            self.speed = 20
+            self.exploration_rate = 0.7
+        elif self.age_group == 'middle':
+            self.speed = 15
+            self.exploration_rate = 0.5
+        elif self.age_group == 'old':
+            self.speed = 10
+            self.exploration_rate = 0.3
 
-    def get_explore_rate(self):
-        return agent_config[f"{self.age_group}_{self.gender}_{self.health_status}"]['explore_rate']
+        if self.gender == 'male':
+            self.speed *= 15
+        elif self.gender == 'female':
+            self.speed *= 10
 
-    def get_stay_put_prob(self):
-        return agent_config[f"{self.age_group}_{self.gender}_{self.health_status}"]['stay_put_prob']
+        if self.health_status == 'good':
+            self.rest_probability = 0.1
+        elif self.health_status == 'bad':
+            self.rest_probability = 0.3
 
+# DQN 모델 정의
 class DQN(nn.Module):
     def __init__(self, input_dim=9, output_dim=8):
         super(DQN, self).__init__()
@@ -45,15 +56,15 @@ def load_model(filename='dqn_model.pth', input_dim=9, output_dim=8):
     model.load_state_dict(torch.load(filename))
     return model
 
-def dqn_learning(dem_array, rirsv_array, wkmstrm_array, road_array, watershed_basins_array, channels_array, reward_calculator, agent, action_mode='8_directions', load_existing=False, model_filename='dqn_model.pth'):
+def dqn_learning(dem_array, rirsv_array, wkmstrm_array, road_array, watershed_basins_array, channels_array, reward_calculator, agent, action_mode='custom', load_existing=False, model_filename='dqn_model.pth'):
     global epsilon
 
-    state_size = 9
+    state_size = 9  # 상태 크기 (9개의 요소로 구성된 튜플)
     if action_mode == '8_directions':
-        action_size = 8
+        action_size = 8  # 행동 크기 (8개의 행동)
     elif action_mode == 'custom':
-        action_size = 6
-
+        action_size = 6  # 행동 크기 (6개의 행동)
+    
     if load_existing and os.path.exists(model_filename):
         model = load_model(model_filename, state_size, action_size)
         print(f"Loaded existing model from {model_filename}")
@@ -74,8 +85,8 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, road_array, watershed_ba
         state = torch.tensor([x, y, get_elevation(dem_array[:, :], x, y), calculate_slope(dem_array[:, :], x, y),
                               rirsv_array[x, y], wkmstrm_array[x, y], road_array[x, y],
                               watershed_basins_array[x, y], channels_array[x, y]], dtype=torch.float32)
-        reward_calculator.state_buffer.clear()
-        reward_calculator.visited_count.clear()
+        reward_calculator.state_buffer.clear()  # 에피소드 시작 시 버퍼 초기화
+        reward_calculator.visited_count.clear()  # 방문한 좌표 초기화
         done = False
         step = 0
         prev_path = [(x, y)]
@@ -126,7 +137,7 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, road_array, watershed_ba
                     elif direction == 'right':
                         next_x, next_y = (x, min(dem_array.shape[1] - 2, y + agent.speed))
                 elif action == 3:  # 제자리에 머무르기 (Staying Put, SP)
-                    if np.random.uniform(0, 1) < agent.stay_put_prob:
+                    if np.random.rand() < agent.rest_probability:
                         next_x, next_y = x, y
                 elif action == 4:  # 시야 확보 (View Enhancing, VE)
                     highest_elevation = get_elevation(dem_array[:, :], x, y)
@@ -169,7 +180,7 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, road_array, watershed_ba
             x, y = next_x, next_y
             prev_path.append((x, y))
 
-            reward_calculator.update_visited_count(x, y)
+            reward_calculator.update_visited_count(x, y)  # 방문 횟수 업데이트
 
             if step % 10 == 0:
                 with torch.no_grad():
@@ -192,7 +203,7 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
     x, y = start_x, start_y
     max_steps = simulation_max_steps
 
-    visited_count = defaultdict(int)
+    visited_count = defaultdict(int)  # 방문한 좌표와 그 횟수를 저장할 딕셔너리
 
     for step in range(max_steps):
         state = torch.tensor([x, y, get_elevation(dem_array[:, :], x, y), calculate_slope(dem_array[:, :], x, y),
@@ -222,14 +233,14 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
                 next_x, next_y = (x + 1, y + 1)
 
         elif action_mode == 'custom':
-            if action == 0:
+            if action == 0:  # 무작위 걷기 (Random Walking, RW)
                 next_x, next_y = (x + np.random.choice([-1, 1]), y + np.random.choice([-1, 1]))
-            elif action == 1:
+            elif action == 1:  # 경로 여행 (Route Traveling, RT)
                 if road_array[x, y]:
                     next_x, next_y = (x + np.random.choice([-1, 1]), y)
                 else:
                     next_x, next_y = (x, y + np.random.choice([-1, 1]))
-            elif action == 2:
+            elif action == 2:  # 방향 여행 (Direction Traveling, DT)
                 direction = np.random.choice(['up', 'down', 'left', 'right'])
                 if direction == 'up':
                     next_x, next_y = (max(1, x - 1), y)
@@ -239,10 +250,10 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
                     next_x, next_y = (x, max(1, y - 1))
                 elif direction == 'right':
                     next_x, next_y = (x, min(y + 1, dem_array.shape[1] - 1))
-            elif action == 3:
-                if np.random.uniform(0, 1) < agent.stay_put_prob:
+            elif action == 3:  # 제자리에 머무르기 (Staying Put, SP)
+                if np.random.rand() < agent.rest_probability:
                     next_x, next_y = x, y
-            elif action == 4:
+            elif action == 4:  # 시야 확보 (View Enhancing, VE)
                 highest_elevation = 0
                 highest_coord = (x, y)
                 for i in range(-1, 2):
@@ -253,7 +264,7 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
                                 highest_elevation = elevation
                                 highest_coord = (x + i, y + j)
                 next_x, next_y = highest_coord
-            elif action == 5 and len(path) > 1:
+            elif action == 5 and len(path) > 1:  # 되돌아가기 (Backtracking, BT)
                 next_x, next_y = path[-2]
 
         next_x = min(max(next_x, 0), dem_array.shape[0] - 1)
@@ -261,7 +272,7 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
 
         path.append((next_x, next_y))
 
-        visited_count[(next_x, next_y)] += 1
+        visited_count[(next_x, next_y)] += 1  # 방문 횟수 업데이트
 
         x, y = next_x, next_y
 

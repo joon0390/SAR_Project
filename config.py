@@ -17,7 +17,7 @@ speed = 10  # 이동 속도
 beta = 0.1  # 불확실성에 대한 가중치
 
 max_steps = 1000  # 최대 스텝 수
-episodes = 1000  # 에피소드 수
+episodes = 100  # 에피소드 수
 simulation_max_steps = 1000 # 시뮬레이션 최대 스템
 
 target_update = 10
@@ -26,12 +26,12 @@ memory_size=10000
 
 # 연령, 성별, 건강 상태에 따른 설정들
 agent_config = {
-    'young_male_good': {'speed': 2, 'explore_rate': 0.7, 'stay_put_prob': 0.1},
-    'young_male_bad': {'speed': 1, 'explore_rate': 0.5, 'stay_put_prob': 0.3},
-    'young_female_good': {'speed': 1, 'explore_rate': 0.6, 'stay_put_prob': 0.2},
-    'young_female_bad': {'speed': 1, 'explore_rate': 0.4, 'stay_put_prob': 0.4},
-    'old_male_good': {'speed': 1, 'explore_rate': 0.5, 'stay_put_prob': 0.3},
-    'old_male_bad': {'speed': 1, 'explore_rate': 0.3, 'stay_put_prob': 0.5},
-    'old_female_good': {'speed': 1, 'explore_rate': 0.4, 'stay_put_prob': 0.3},
-    'old_female_bad': {'speed': 1, 'explore_rate': 0.2, 'stay_put_prob': 0.6},
+    'young_male_good': {'speed': 20, 'explore_rate': 0.7, 'stay_put_prob': 0.1},
+    'young_male_bad': {'speed': 10, 'explore_rate': 0.5, 'stay_put_prob': 0.3},
+    'young_female_good': {'speed': 10, 'explore_rate': 0.6, 'stay_put_prob': 0.2},
+    'young_female_bad': {'speed': 10, 'explore_rate': 0.4, 'stay_put_prob': 0.4},
+    'old_male_good': {'speed': 10, 'explore_rate': 0.5, 'stay_put_prob': 0.3},
+    'old_male_bad': {'speed': 5, 'explore_rate': 0.3, 'stay_put_prob': 0.5},
+    'old_female_good': {'speed': 10, 'explore_rate': 0.4, 'stay_put_prob': 0.3},
+    'old_female_bad': {'speed': 5, 'explore_rate': 0.2, 'stay_put_prob': 0.6},
 }

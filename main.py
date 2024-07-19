@@ -18,7 +18,7 @@ if __name__ == "__main__":
         print(f"{filename} does not exist. Please ensure the file is available.")
         exit(1)
 
-     # 채널을 각각 분리
+    # 채널을 각각 분리
     dem_array = combined_array[:, :, 0]
     rirsv_transformed = combined_array[:, :, 1]
     wkmstrm_transformed = combined_array[:, :, 2]
@@ -31,13 +31,19 @@ if __name__ == "__main__":
     
     # Agent 인스턴스 생성
     agent = Agent(age_group='young', gender='male', health_status='good')
+
+    # 기존 모델 파일이 있으면 삭제
+    model_filename = 'dqn_model.pth'
+    if os.path.exists(model_filename):
+        os.remove(model_filename)
+        print(f"Deleted existing model file: {model_filename}")
     
     # DQN 학습 수행
     dqn_learning(dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed, reward_calculator, agent, action_mode='custom')
 
     # 경로 시뮬레이션 예시
-    start_x, start_y = 100, 100
-    model = load_model('dqn_model.pth', input_dim=9, output_dim=8)
+    start_x, start_y = 3500, 3500
+    model = load_model('dqn_model.pth', input_dim=9, output_dim=6)  # 모델 로드 시 output_dim을 맞춤
     path = simulate_path(start_x, start_y, model, dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed, agent, action_mode='custom')
     
     print("Simulated Path:")
