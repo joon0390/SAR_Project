@@ -48,13 +48,13 @@ class RewardCalculator:
 
         # 강이나 경사가 큰 지역에 있으면 큰 패널티
         if rirsv:
-            reward -= 10
+            reward -= 20 ##10->20
 
         if slope > 0.5:
-            reward -= 20
+            reward -= 20 ##10->20
 
         if slope <= 0.5:
-            reward += 10
+            reward += 20 ##10->20
 
         # 작은 강(개천) 근처에 있으면 중간 패널티
         if wkmstrm:
@@ -69,7 +69,7 @@ class RewardCalculator:
             reward -= 5
 
         # 이동 거리에 따른 보상/패널티 추가
-        reward -= 0.1 * (abs(state[0] - self.start_x) + abs(state[1] - self.start_y)) ##거리에 따른 reward 추가
+        reward -= 0.1 * (abs(state[0] - self.start_x) + abs(state[1] - self.start_y)) ##이거 삭제 햇었는데 추가하는 것이 좋을듯? 일단 stay를 기조로 할 때는
 
         # 버퍼에 현재 상태 추가
         self.state_buffer.append(state)
