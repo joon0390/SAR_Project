@@ -13,27 +13,27 @@ class Agent:
         self.gender = gender
         self.health_status = health_status
         self.set_attributes()
-#속도 변환할 때 등산속도를 0.75배정도로 낮추면 좋을듯
+
     def set_attributes(self):
         if self.age_group == 'young':
-            self.speed = 10
-            self.exploration_rate = 0.7
+            self.speed = 20*0.75
+            self.exploration_rate = 0.7 ##speed를 일반적일때 보다 0.75배를 했음 이건 사이트에 나와있는거 보고 한건데 도메인에서 더 찾아봐야 할듯
         elif self.age_group == 'middle':
-            self.speed = 7.5
+            self.speed = 15*0.75
             self.exploration_rate = 0.5
         elif self.age_group == 'old':
-            self.speed = 5
+            self.speed = 10*0.75
             self.exploration_rate = 0.3
 
         if self.gender == 'male':
-            self.speed *= 7.5
+            self.speed *= 15*0.75 #
         elif self.gender == 'female':
-            self.speed *= 5
+            self.speed *= 10*0.75
 
         if self.health_status == 'good':
-            self.rest_probability = 0.3
+            self.rest_probability = 0.1
         elif self.health_status == 'bad':
-            self.rest_probability = 0.8
+            self.rest_probability = 0.8 # 부상당하면 이동의 무리가 있는데 좀 높게 잡는건 어떰?? 교수님들과도 상의 해보는 것도 나쁘지 않을듯
 
 # DQN 모델 정의
 class DQN(nn.Module):
