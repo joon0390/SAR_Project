@@ -35,9 +35,13 @@ class RewardCalculator:
         x, y, elevation, slope, rirsv, wkmstrm, road, watershed_basins, channels = state
 
         if rirsv:
-            return -10000
+            return -1000
 
         reward = -1  # 기본 패널티
+
+        # 탐험 보상
+        if self.visited_count[(x, y)] == 0:
+            reward += 10
 
         # 도로에 도달하면 높은 보상
         if road:
@@ -70,7 +74,7 @@ class RewardCalculator:
 
         # 이동 거리에 따른 보상/패널티 추가
         reward -= 0.1 * (abs(state[0] - self.start_x) + abs(state[1] - self.start_y))
-
+        
         # 버퍼에 현재 상태 추가
         self.state_buffer.append(state)
 
@@ -86,11 +90,11 @@ class RewardCalculator:
                 
                 # 2. 연속적으로 road를 따라간 경우 보상
                 if prev_state[6] and curr_state[6]:
-                    reward += 10
+                    reward += 50
                 
                 # 3. 이전 timestep과 달리 watershed의 경계에 도달한 경우 패널티
                 if not prev_state[7] and curr_state[7]:
-                    reward -= 10
+                    reward -= 20
                 
                 # 4. 경사가 연속적으로 커질때 패널티
                 if prev_state[3] < curr_state[3]:
@@ -113,6 +117,10 @@ class RewardCalculator:
                     reward += 50
                 if prev_state[8] and not curr_state[8]:  # channels에서 벗어난 경우
                     reward += 5
+
+        # 방문한 장소에 대한 패널티 증가
+        if self.visited_count[(x, y)] > 1:
+            reward -= 20 * self.visited_count[(x, y)]  # 방문 횟수에 따라 패널티 증가
 
         return reward
 

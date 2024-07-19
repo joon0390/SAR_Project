@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 from utils import get_elevation, calculate_slope
 from config import *
-from collections import defaultdict  # 추가
+from collections import defaultdict
 import os
 
 class Agent:
@@ -56,7 +56,7 @@ def load_model(filename='dqn_model.pth', input_dim=9, output_dim=8):
     model.load_state_dict(torch.load(filename))
     return model
 
-def dqn_learning(dem_array, rirsv_array, wkmstrm_array, road_array, watershed_basins_array, channels_array, reward_calculator, agent, action_mode='custom', load_existing=False, model_filename='dqn_model.pth'):
+def dqn_learning(dem_array, rirsv_array, wkmstrm_array, road_array, watershed_basins_array, channels_array, reward_calculator, agent, action_mode='8_directions', load_existing=False, model_filename='dqn_model.pth'):
     global epsilon
 
     state_size = 9  # 상태 크기 (9개의 요소로 구성된 튜플)
@@ -153,8 +153,8 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, road_array, watershed_ba
                 elif action == 5 and len(prev_path) > 1:  # 되돌아가기 (Backtracking, BT)
                     next_x, next_y = prev_path[-2]
 
-            next_x = min(max(next_x, 0), dem_array.shape[0] - 1)
-            next_y = min(max(next_y, 0), dem_array.shape[1] - 1)
+            next_x = int(min(max(next_x, 0), dem_array.shape[0] - 1))
+            next_y = int(min(max(next_y, 0), dem_array.shape[1] - 1))
 
             next_state = torch.tensor([next_x, next_y, get_elevation(dem_array[:, :], next_x, next_y), calculate_slope(dem_array[:, :], next_x, next_y),
                                        rirsv_array[next_x, next_y], wkmstrm_array[next_x, next_y], road_array[next_x, next_y],
@@ -259,7 +259,7 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
                 for i in range(-1, 2):
                     for j in range(-1, 2):
                         if 0 <= x + i < dem_array.shape[0] and 0 <= y + j < dem_array.shape[1]:
-                            elevation = get_elevation(dem_array[:, :, 0], x + i, y + j)
+                            elevation = get_elevation(dem_array[:, :], x + i, y + j)
                             if elevation > highest_elevation:
                                 highest_elevation = elevation
                                 highest_coord = (x + i, y + j)
@@ -267,12 +267,16 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
             elif action == 5 and len(path) > 1:  # 되돌아가기 (Backtracking, BT)
                 next_x, next_y = path[-2]
 
-        next_x = min(max(next_x, 0), dem_array.shape[0] - 1)
-        next_y = min(max(next_y, 0), dem_array.shape[1] - 1)
+        next_x = int(min(max(next_x, 0), dem_array.shape[0] - 1))
+        next_y = int(min(max(next_y, 0), dem_array.shape[1] - 1))
 
         path.append((next_x, next_y))
 
         visited_count[(next_x, next_y)] += 1  # 방문 횟수 업데이트
+
+        # 특정 패턴을 감지하여 이동 방향 변경
+        if visited_count[(next_x, next_y)] > 3:  # 3회 이상 방문한 경우
+            action = (action + 4) % 8  # 이동 방향 변경
 
         x, y = next_x, next_y
 

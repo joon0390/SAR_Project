@@ -42,7 +42,7 @@ if __name__ == "__main__":
     dqn_learning(dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed, reward_calculator, agent, action_mode='custom')
 
     # 경로 시뮬레이션 예시
-    start_x, start_y = 3500, 3500
+    start_x, start_y = 3500, 4000
     model = load_model('dqn_model.pth', input_dim=9, output_dim=6)  # 모델 로드 시 output_dim을 맞춤
     path = simulate_path(start_x, start_y, model, dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed, agent, action_mode='custom')
     
