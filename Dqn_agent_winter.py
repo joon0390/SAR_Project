@@ -16,13 +16,13 @@ class Agent:
 
     def set_attributes(self):
         if self.age_group == 'young':
-            self.speed = 20
+            self.speed = 13
             self.exploration_rate = 0.7
         elif self.age_group == 'middle':
-            self.speed = 15
+            self.speed = 10
             self.exploration_rate = 0.5
         elif self.age_group == 'old':
-            self.speed = 10
+            self.speed = 6
             self.exploration_rate = 0.3
 
         if self.gender == 'male':
@@ -33,7 +33,7 @@ class Agent:
         if self.health_status == 'good':
             self.rest_probability = 0.1
         elif self.health_status == 'bad':
-            self.rest_probability = 0.3
+            self.rest_probability = 0.7 #여기도 이 확률높이는 거 괜찮아보임 0.3 -> 0.7
 
 # DQN 모델 정의
 class DQN(nn.Module):
