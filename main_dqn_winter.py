@@ -31,8 +31,9 @@ if __name__ == "__main__":
     
     action_mode = 'custom'  # or '8_directions'
 
+    agent = Agent()
     # DQN 학습 수행
-    dqn_learning(dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed, reward_calculator, action_mode=action_mode)
+    dqn_learning(dem_array, rirsv_transformed, wkmstrm_transformed, road_transformed, watershed_basins_transformed, channels_transformed, reward_calculator, agent,action_mode=action_mode)
 
     # 경로 시뮬레이션 예시
     start_x, start_y = 3500, 2000
