@@ -2,7 +2,7 @@ import os
 import numpy as np
 from geo_processing import GISProcessor, load_shapefiles
 from reward_winter import RewardCalculator
-from Dqn_agent_winter import DQN, dqn_learning, simulate_path, load_model, Agent
+from method.Dqn_agent_winter import DQN, dqn_learning, simulate_path, load_model, Agent
 from config import *
 from utils import show_path_with_arrows
 
