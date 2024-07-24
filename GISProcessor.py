@@ -1,7 +1,6 @@
 import numpy as np
 import geopandas as gpd
 import rasterio
-from rasterio.transform import rowcol, from_origin
 from shapely.geometry import Point
 import os
 import matplotlib.pyplot as plt
@@ -15,25 +14,7 @@ class GISProcessor:
         print(f"DEM bounds: {self.dem.bounds}")
         print(f"DEM shape: {self.dem_array.shape}")
 
-    def define_region(self, shapefile):
-        if shapefile.crs != self.dem.crs:
-            shapefile = shapefile.to_crs(self.dem.crs)
-        
-        minx, miny, maxx, maxy = shapefile.total_bounds
-        
-        row_start, col_start = rowcol(self.dem_transform, minx, maxy)
-        row_end, col_end = rowcol(self.dem_transform, maxx, miny)
-        
-        row_start = max(0, row_start)
-        col_start = max(0, col_start)
-        row_end = min(self.dem_array.shape[0], row_end)
-        col_end = min(self.dem_array.shape[1], col_end)
-        
-        print(f"Region of interest: rows {row_start}:{row_end}, cols {col_start}:{col_end}")
-        return (row_start, row_end, col_start, col_end)
-
-    def process_shapefile(self, shapefile, region):
-        row_start, row_end, col_start, col_end = region
+    def process_shapefile(self, shapefile):
         result = np.zeros(self.dem_array.shape, dtype=np.uint8)
         
         print(f"Processing shapefile with CRS: {shapefile.crs}")
@@ -59,15 +40,15 @@ class GISProcessor:
                         result[i, j] = 1
         
         print(f"Processed shapefile. Non-zero elements: {np.count_nonzero(result)}")
-        return result[row_start:row_end, col_start:col_end]
+        return result
 
-    def load_or_process_array(self, filename, shapefile, region):
+    def load_or_process_array(self, filename, shapefile):
         if os.path.exists(filename):
             print(f"Loading existing array from {filename}")
             array = np.load(filename)
         else:
             print(f"Processing and saving array to {filename}")
-            array = self.process_shapefile(shapefile, region)
+            array = self.process_shapefile(shapefile)
             np.save(filename, array)
         self.check_non_zero_values(array, filename)
         return array
@@ -80,24 +61,15 @@ class GISProcessor:
         else:
             print(f"No non-zero elements found in {filename}.")
 
-    def create_featured_dem(self, rirsv, wkmstrm, climbpath, road, watershed, channels, region):
-        row_start, row_end, col_start, col_end = region
-        dem_slice = self.dem_array[row_start:row_end, col_start:col_end]
+    def create_featured_dem(self, rirsv, wkmstrm, climbpath, road, watershed, channels):
+        dem_slice = self.dem_array
         
-        rirsv_array = self.load_or_process_array('rirsv_array.npy', rirsv, region)
-        wkmstrm_array = self.load_or_process_array('wkmstrm_array.npy', wkmstrm, region)
-        climbpath_array = self.load_or_process_array('climbpath_array.npy', climbpath, region)
-        road_array = self.load_or_process_array('road_array.npy', road, region)
-        watershed_array = self.load_or_process_array('watershed_array.npy', watershed, region)
-        channels_array = self.load_or_process_array('channels_array.npy', channels, region)
-
-        print(f"DEM slice shape: {dem_slice.shape}")
-        print(f"RIRSV array shape: {rirsv_array.shape}")
-        print(f"WKMSTRM array shape: {wkmstrm_array.shape}")
-        print(f"Climbpath array shape: {climbpath_array.shape}")
-        print(f"Road array shape: {road_array.shape}")
-        print(f"Watershed array shape: {watershed_array.shape}")
-        print(f"Channels array shape: {channels_array.shape}")
+        rirsv_array = self.load_or_process_array('rirsv_array.npy', rirsv)
+        wkmstrm_array = self.load_or_process_array('wkmstrm_array.npy', wkmstrm)
+        climbpath_array = self.load_or_process_array('climbpath_array.npy', climbpath)
+        road_array = self.load_or_process_array('road_array.npy', road)
+        watershed_array = self.load_or_process_array('watershed_array.npy', watershed)
+        channels_array = self.load_or_process_array('channels_array.npy', channels)
 
         combined_array = np.stack((dem_slice, rirsv_array, climbpath_array, wkmstrm_array, road_array, watershed_array, channels_array), axis=-1)
         print("Combined array shape:", combined_array.shape)
@@ -133,12 +105,9 @@ if __name__ == "__main__":
     processor = GISProcessor(dem_file)
     rirsv, wkmstrm, climbpath, road, watershed_basins, channels, test_area = load_shapefiles(rirsv_shp_file, wkmstrm_shp_file, climbpath_shp_file, road_shp_file, watershed_basins_shp_file, channels_shp_file, area_difference_file)
 
-    # Define region of interest
-    region = processor.define_region(test_area)
-
     # Create featured DEM
     print("Creating featured DEM")
-    featured_dem = processor.create_featured_dem(rirsv, wkmstrm, climbpath, road, watershed_basins, channels, region)
+    featured_dem = processor.create_featured_dem(rirsv, wkmstrm, climbpath, road, watershed_basins, channels)
     print("Featured DEM shape:", featured_dem.shape)
 
     # Save the array
@@ -147,7 +116,7 @@ if __name__ == "__main__":
     print(f"Featured DEM saved to {save_path}")
 
     # Process test area
-    test_area_result = processor.process_shapefile(test_area, region)
+    test_area_result = processor.process_shapefile(test_area)
     np.save('test_area_result.npy', test_area_result)
     print("Test area result shape:", test_area_result.shape)
 

@@ -7,6 +7,7 @@ from rasterio.plot import show
 from pyproj import Transformer
 from rasterio.transform import Affine
 import os
+from shapely.geometry import Point
 
 def load_and_print_npy(filename, slice_range=None):
     if os.path.exists(filename):
@@ -142,13 +143,115 @@ def print_dem_and_shapefile_values(dem_file_path, shapefile_path):
     print("\nShapefile Data:")
     print(shapefile_data)
 
-if __name__ == '__main__':
-    filename = '/Users/heekim/Documents/GitHub/SAR_Project/featured_dem.npy'
+# def get_random_point_within_polygon(shapefile_path, reference_shapefile_path, dem_shape):
+#     # Load the shapefiles
+#     gdf = gpd.read_file(shapefile_path)
+#     reference_gdf = gpd.read_file(reference_shapefile_path)
+    
+#     # Assuming there's only one polygon in each shapefile
+#     polygon = gdf.geometry[0]
+#     reference_polygon = reference_gdf.geometry[0]
+    
+#     # Get the coordinate reference systems (CRS)
+#     src_crs = gdf.crs
+#     dst_crs = reference_gdf.crs
+    
+#     # Initialize the transformer
+#     transformer = Transformer.from_crs(src_crs, dst_crs, always_xy=True)
+    
+#     # Get the bounding box of the polygon
+#     minx, miny, maxx, maxy = polygon.bounds
+    
+#     while True:
+#         # Generate random points within the bounding box
+#         pnt = Point(np.random.uniform(minx, maxx), np.random.uniform(miny, maxy))
+        
+#         # Check if the point is within the polygon
+#         if polygon.contains(pnt):
+#             # Transform the point to the reference CRS
+#             pnt_x, pnt_y = transformer.transform(pnt.x, pnt.y)
+            
+#             # Convert the coordinates to DEM array indices
+#             dem_x = int((pnt_x - reference_polygon.bounds[0]) / (reference_polygon.bounds[2] - reference_polygon.bounds[0]) * dem_shape[0])
+#             dem_y = int((pnt_y - reference_polygon.bounds[1]) / (reference_polygon.bounds[3] - reference_polygon.bounds[1]) * dem_shape[1])
+            
+#             # Check if the transformed point is within the DEM bounds
+#             if 0 <= dem_x < dem_shape[0] and 0 <= dem_y < dem_shape[1]:
+#                 return dem_x, dem_y
 
-    # .npy 파일을 로드
-    if os.path.exists(filename):
-        combined_array = np.load(filename)
-        print(f"Loaded combined array from {filename}")
-        print(f"Combined array shape: {combined_array.shape}")
-   
-   
+def get_random_point_within_polygon(shapefile_path, dem_shape):
+    # Load the shapefile
+    gdf = gpd.read_file(shapefile_path)
+    
+    # Assuming there's only one polygon in the shapefile
+    polygon = gdf.geometry[0]
+    
+    # Get the bounding box of the polygon
+    minx, miny, maxx, maxy = polygon.bounds
+    
+    # Define the transform
+    transform = rasterio.transform.from_bounds(minx, miny, maxx, maxy, dem_shape[1], dem_shape[0])
+    # Ensure the transform is an Affine object
+    if not isinstance(transform, Affine):
+        transform = Affine(*transform)
+    
+    try:
+        inverse_transform = ~transform
+    except ValueError as ve:
+        print(f"Transform matrix is degenerate: {ve}")
+        return None, None
+
+    while True:
+        # Generate random points within the bounding box
+        pnt = Point(np.random.uniform(minx, maxx), np.random.uniform(miny, maxy))
+        
+        # Check if the point is within the polygon
+        if polygon.contains(pnt):
+            # Convert point coordinates to the array indices
+            row, col = inverse_transform * (pnt.x, pnt.y)
+            if 0 <= row < dem_shape[0] and 0 <= col < dem_shape[1]:
+                return int(row), int(col)
+    
+    # If no valid point is found within the polygon bounds
+    print("Failed to find a valid point within the polygon.")
+    return None, None
+
+
+if __name__ == '__main__':
+    filename = '/Users/heekim/Desktop/heekimjun/SAR_Project_Agent/test_area.npy'
+    files = '/Users/heekim/Documents/GitHub/SAR_Project/featured_dem.npy'
+
+   # 1. numpy 배열 로드
+    test_area = np.load(filename)
+    combined_array = np.load(filename)
+    print(combined_array.shape)
+    
+    dem_array = combined_array[:, :, 0]
+    rirsv_transformed = combined_array[:, :, 1]
+    wkmstrm_transformed = combined_array[:, :, 2]
+    climbpath_transformed = combined_array[:, :, 3]
+    watershed_basins_transformed = combined_array[:, :, 4]
+    channels_transformed = combined_array[:, :, 5]
+
+    # 2. 배열의 기본 정보 출력
+    print(f"Array shape: {test_area.shape}")
+    print(f"Array contents:\n{test_area}")
+
+    # 3. 값이 0이 아닌 요소 확인
+    non_zero_indices = np.nonzero(test_area)
+    non_zero_values = test_area[non_zero_indices]
+
+    # 4. 값이 0이 아닌 요소들의 개수 확인
+    non_zero_count = len(non_zero_values)
+    print(f"Number of non-zero elements: {non_zero_count}")
+
+    # 5. 값이 0이 아닌 요소들의 위치 확인
+    print(f"Non-zero elements are located at indices:\n{non_zero_indices}")
+
+    # 6. 시각화
+    plt.figure(figsize=(10, 10))
+    plt.imshow(rirsv_transformed, cmap='gray')
+    if non_zero_count > 0:
+        plt.scatter(non_zero_indices[1], non_zero_indices[0], color='red', s=1)  # 빨간 점으로 표시
+    plt.title('Non-zero elements in test_area.npy')
+    plt.show()
