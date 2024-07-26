@@ -80,7 +80,7 @@ class GISProcessor:
         else:
             print(f"No non-zero elements found in {filename}.")
 
-    def create_featured_dem(self, rirsv, wkmstrm, climbpath, road, watershed, channels, region):
+    def create_featured_dem(self, rirsv, wkmstrm, climbpath, road, watershed, channels,forestroad,hiking, region):
         row_start, row_end, col_start, col_end = region
         dem_slice = self.dem_array[row_start:row_end, col_start:col_end]
         
@@ -90,6 +90,8 @@ class GISProcessor:
         road_array = self.load_or_process_array('road_array.npy', road, region)
         watershed_array = self.load_or_process_array('watershed_array.npy', watershed, region)
         channels_array = self.load_or_process_array('channels_array.npy', channels, region)
+        forestroad_array = self.load_or_process_array('forestroad_array.npy',forestroad,region)
+        hiking_array = self.load_or_process_array('hiking_array.npy',hiking,region)
 
         print(f"DEM slice shape: {dem_slice.shape}")
         print(f"RIRSV array shape: {rirsv_array.shape}")
@@ -99,26 +101,28 @@ class GISProcessor:
         print(f"Watershed array shape: {watershed_array.shape}")
         print(f"Channels array shape: {channels_array.shape}")
 
-        combined_array = np.stack((dem_slice, rirsv_array, climbpath_array, wkmstrm_array, road_array, watershed_array, channels_array), axis=-1)
+        combined_array = np.stack((dem_slice, rirsv_array, climbpath_array, wkmstrm_array, road_array, watershed_array, channels_array,forestroad_array,hiking_array), axis=-1)
         print("Combined array shape:", combined_array.shape)
 
         return combined_array
 
-def load_shapefiles(rirsv_shp_file, wkmstrm_shp_file, climbpath_shp_file, road_shp_file, watershed_basins_shp_file, channels_shp_file, area_difference_file):
+def load_shapefiles(rirsv_shp_file, wkmstrm_shp_file, climbpath_shp_file, road_shp_file, watershed_basins_shp_file, channels_shp_file,forest_shp_file,hiking_shp_file, area_difference_file):
     rirsv = gpd.read_file(rirsv_shp_file)
     wkmstrm = gpd.read_file(wkmstrm_shp_file)
     climbpath = gpd.read_file(climbpath_shp_file)
     road = gpd.read_file(road_shp_file)
     watershed_basins = gpd.read_file(watershed_basins_shp_file)
     channels = gpd.read_file(channels_shp_file)
+    forestroad = gpd.read_file(forestroad_shp_file)
+    hiking = gpd.read_file(hiking_shp_file)
     test_area = gpd.read_file(area_difference_file)
     
-    for name, shapefile in zip(["RIRSV", "WKMSTRM", "Climbpath", "Road", "Watershed", "Channels", "Test Area"],
-                               [rirsv, wkmstrm, climbpath, road, watershed_basins, channels, test_area]):
+    for name, shapefile in zip(["RIRSV", "WKMSTRM", "Climbpath", "Road", "Watershed", "Channels","Forestroad","Hiking", "Test Area"],
+                               [rirsv, wkmstrm, climbpath, road, watershed_basins, channels,forestroad,hiking, test_area]):
         print(f"{name} Shapefile CRS: {shapefile.crs}")
         print(f"{name} Shapefile bounds: {shapefile.total_bounds}")
     
-    return rirsv, wkmstrm, climbpath, road, watershed_basins, channels, test_area
+    return rirsv, wkmstrm, climbpath, road, watershed_basins, channels,forestroad,hiking, test_area
 
 def visualize_array(array, title):
     plt.figure(figsize=(10, 10))
@@ -131,14 +135,14 @@ if __name__ == "__main__":
     from config import *
 
     processor = GISProcessor(dem_file)
-    rirsv, wkmstrm, climbpath, road, watershed_basins, channels, test_area = load_shapefiles(rirsv_shp_file, wkmstrm_shp_file, climbpath_shp_file, road_shp_file, watershed_basins_shp_file, channels_shp_file, area_difference_file)
+    rirsv, wkmstrm, climbpath, road, watershed_basins, channels,forestroad,hiking, test_area = load_shapefiles(rirsv_shp_file, wkmstrm_shp_file, climbpath_shp_file, road_shp_file, watershed_basins_shp_file, channels_shp_file,forestroad_shp_file,hiking_shp_file, area_difference_file)
 
     # Define region of interest
     region = processor.define_region(test_area)
 
     # Create featured DEM
     print("Creating featured DEM")
-    featured_dem = processor.create_featured_dem(rirsv, wkmstrm, climbpath, road, watershed_basins, channels, region)
+    featured_dem = processor.create_featured_dem(rirsv, wkmstrm, climbpath, road, watershed_basins, channels, forestroad,hiking,region)
     print("Featured DEM shape:", featured_dem.shape)
 
     # Save the array
@@ -159,4 +163,6 @@ if __name__ == "__main__":
     visualize_array(featured_dem[:,:,4], 'Road')
     visualize_array(featured_dem[:,:,5], 'Watershed')
     visualize_array(featured_dem[:,:,6], 'Channels')
+    visualize_array(featured_dem[:,:,7], 'forestroad') #추가
+    visualize_array(featured_dem[:,:,8], 'hiking') #추가
     visualize_array(test_area_result, 'Test Area')
