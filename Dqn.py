@@ -3,9 +3,15 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from utils import get_elevation, calculate_slope
-from config import *
 from collections import defaultdict  # 추가
 import os
+from reward import RewardCalculator
+from geo_processing import GISProcessor, load_shapefiles
+from reward import RewardCalculator
+from config import *
+from utils import show_path_with_arrows, get_random_point_within_polygon
+
+
 
 class Agent:
     def __init__(self, age_group='young', gender='male', health_status='good'):
@@ -19,7 +25,7 @@ class Agent:
             self.speed = 2
             self.explore_ratio = 0.8
         elif self.age_group == 'middle':
-            self.speed = 2
+            self.speed = 1.5
             self.explore_ratio = 0.5
         elif self.age_group == 'old':
             self.speed = 1
@@ -32,7 +38,7 @@ class Agent:
 
 
 class DQN(nn.Module):
-    def __init__(self, input_dim=10, output_dim=8):
+    def __init__(self, input_dim=12, output_dim=8):
         super(DQN, self).__init__()
         self.fc1 = nn.Linear(input_dim, 24)
         self.fc2 = nn.Linear(24, 24)
@@ -46,13 +52,13 @@ class DQN(nn.Module):
 def save_model(model, filename='dqn_model.pth'):
     torch.save(model.state_dict(), filename)
 
-def load_model(filename='dqn_model.pth', input_dim=10, output_dim=8):
+def load_model(filename='dqn_model.pth', input_dim=12, output_dim=8):
     model = DQN(input_dim, output_dim)
     model.load_state_dict(torch.load(filename))
     return model
 
-def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array, reward_calculator, agent, action_mode='8_directions', load_existing=False, model_filename='dqn_model.pth'):
-    state_size = 10  # 상태 크기 (9개의 요소로 구성된 튜플)
+def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array,forestroad_array,hiking_array, reward_calculator, agent, action_mode='8_directions', load_existing=False, model_filename='dqn_model.pth'):
+    state_size = 12 # 상태 크기 (9개의 요소로 구성된 튜플)
     if action_mode == '8_directions':
         action_size = 8  # 행동 크기 (8개의 행동)
     elif action_mode == 'custom':
@@ -77,7 +83,8 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
         reward_calculator.start_x, reward_calculator.start_y = x, y
         state = torch.tensor([x, y, reward_calculator.get_elevation(x, y), reward_calculator.calculate_slope(x, y),
                               rirsv_array[x, y], wkmstrm_array[x, y], climbpath_array[x, y],
-                              road_array[x, y], watershed_basins_array[x, y], channels_array[x, y]], dtype=torch.float32)
+                              road_array[x, y], watershed_basins_array[x, y], channels_array[x, y],
+                              forestroad_array[x,y],hiking_array[x,y]], dtype=torch.float32)
         reward_calculator.state_buffer.clear()  # 에피소드 시작 시 버퍼 초기화
         reward_calculator.visited_count.clear()  # 방문한 좌표 초기화
         done = False
@@ -151,7 +158,8 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
 
             next_state = torch.tensor([next_x, next_y, reward_calculator.get_elevation(next_x, next_y), reward_calculator.calculate_slope(next_x, next_y),
                                        rirsv_array[next_x, next_y], wkmstrm_array[next_x, next_y], climbpath_array[next_x, next_y],
-                                       road_array[next_x, next_y], watershed_basins_array[next_x, next_y], channels_array[next_x, next_y]], dtype=torch.float32)
+                                       road_array[next_x, next_y], watershed_basins_array[next_x, next_y], channels_array[next_x, next_y],
+                                       forestroad_array[next_x,next_y],hiking_array[next_x,next_y]], dtype=torch.float32)
 
             reward = reward_calculator.reward_function(next_state)
 
@@ -191,7 +199,7 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
 
     return model
 
-def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array, agent, action_mode='8_directions'):
+def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array, forestroad_array,hiking_array,agent, action_mode='8_directions'):
     path = [(start_x, start_y)]
     x, y = start_x, start_y
     max_steps = simulation_max_steps
@@ -201,7 +209,8 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
     for step in range(max_steps):
         state = torch.tensor([x, y, get_elevation(dem_array, x, y), calculate_slope(dem_array, x, y),
                               rirsv_array[x, y], wkmstrm_array[x, y], climbpath_array[x, y],
-                              road_array[x, y], watershed_basins_array[x, y], channels_array[x, y]], dtype=torch.float32)
+                              road_array[x, y], watershed_basins_array[x, y], channels_array[x, y],
+                              forestroad_array[x,y],hiking_array[x,y]], dtype=torch.float32)
         with torch.no_grad():
             action = torch.argmax(model(state)).item()
 
@@ -273,50 +282,4 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
 
     return path
 
-def main():
-    # 필요한 데이터 불러오기 또는 생성
-    dem_array = np.load('dem_array.npy')  # 예시로 numpy 배열 로드
-    rirsv_array = np.load('rirsv_array.npy')  # 예시로 numpy 배열 로드
-    wkmstrm_array = np.load('wkmstrm_array.npy')  # 예시로 numpy 배열 로드
-    climbpath_array = np.load('climbpath_array.npy')  # 예시로 numpy 배열 로드
-    road_array = np.load('road_array.npy')  # 예시로 numpy 배열 로드
-    watershed_basins_array = np.load('watershed_basins_array.npy')  # 예시로 numpy 배열 로드
-    channels_array = np.load('channels_array.npy')  # 예시로 numpy 배열 로드
-    
-    agent = Agent(age_group='young', gender='male', health_status='good')
-    model = DQN()
-    
-    # 모델 학습
-    reward_calculator = RewardCalculator(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array)
-    model = dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array, reward_calculator, agent, action_mode='custom')
-    
-    # 경로 시뮬레이션
-    start_x, start_y = 3110, 2647
-    path = simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array, agent, action_mode='custom')
-    print(f"Simulated Path: {path}")
 
-
-
-def main():
-    # 필요한 데이터 불러오기 또는 생성
-    dem_array = np.load('dem_array.npy')  # 예시로 numpy 배열 로드
-    rirsv_array = np.load('rirsv_array.npy')  # 예시로 numpy 배열 로드
-    wkmstrm_array = np.load('wkmstrm_array.npy')  # 예시로 numpy 배열 로드
-    climbpath_array = np.load('climbpath_array.npy')  # 예시로 numpy 배열 로드
-    watershed_basins_array = np.load('watershed_basins_array.npy')  # 예시로 numpy 배열 로드
-    channels_array = np.load('channels_array.npy')  # 예시로 numpy 배열 로드
-    
-    agent = Agent(age_group='young', gender='male', health_status='good')
-    model = DQN()
-    
-    # 모델 학습
-    reward_calculator = ...  # 적절히 정의된 reward_calculator
-    model = dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, watershed_basins_array, channels_array, reward_calculator, agent, action_mode='custom')
-    
-    # 경로 시뮬레이션
-    start_x, start_y = 3110, 2647
-    path = simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array, climbpath_array, watershed_basins_array, channels_array, agent, action_mode='custom')
-    print(f"Simulated Path: {path}")
-
-if __name__ == "__main__":
-    main()
