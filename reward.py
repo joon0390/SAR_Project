@@ -2,7 +2,7 @@ import numpy as np
 from collections import deque, defaultdict  # Add defaultdict to imports
 
 class RewardCalculator:
-    def __init__(self, dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array):
+    def __init__(self, dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array,forestroad_array,hiking_array):
         self.dem_array = dem_array
         self.rirsv_array = rirsv_array
         self.wkmstrm_array = wkmstrm_array
@@ -10,6 +10,8 @@ class RewardCalculator:
         self.road_array = road_array
         self.watershed_basins_array = watershed_basins_array
         self.channels_array = channels_array
+        self.forestroad_array = forestroad_array
+        self.hiking_array = hiking_array
         self.current_watershed = None
         self.state_buffer = deque(maxlen=5)
         self.visited_count = defaultdict(int)
@@ -38,15 +40,15 @@ class RewardCalculator:
         주어진 상태에 대해 보상을 계산합니다.
         상태는 (x, y, 고도, 경사, 물저장소, 물길, 등산 경로, 도로, 유역, 채널)로 구성됩니다.
         """
-        x, y, elevation, slope, rirsv, wkmstrm, climbpath, road, watershed_basins, channels = state
+        x, y, elevation, slope, rirsv, wkmstrm, climbpath, road, watershed_basins, channels,forestroad,hiking = state
 
         # 물저장소에 있는 경우 큰 벌칙을 부여합니다.
         if rirsv:
             return -10000
 
         reward = -1
-
-        # 등산 경로에 있는 경우 보상을 부여합니다.
+    
+        # 토지피복도에 있는 경우 보상을 부여합니다.
         if climbpath:
             reward += 50
 
@@ -71,9 +73,16 @@ class RewardCalculator:
         # 유역에 있는 경우 벌칙을 부여합니다.
         if watershed_basins:
             reward -= 5
+        #도로에 있는 경우 큰 보상
+        if forestroad : 
+            reward += 1000
+        #등산로에 있는 경우 큰 보상
+        if hiking :
+            reward += 20
+        
 
         # 시작점에서 멀어질수록 벌칙을 부여합니다.
-        reward -= 0.1 * (abs(state[0] - self.start_x) + abs(state[1] - self.start_y))
+        # reward -= 0.1 * (abs(state[0] - self.start_x) + abs(state[1] - self.start_y))
 
         # 현재 상태를 state_buffer에 추가합니다.
         self.state_buffer.append(state)
