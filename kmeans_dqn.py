@@ -299,8 +299,7 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
 
         x, y = next_x, next_y
 
-        if climbpath_array[x, y]:
-            break
+        
 
     return path
 
