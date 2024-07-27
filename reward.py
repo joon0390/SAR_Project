@@ -11,7 +11,7 @@ class RewardCalculator:
         self.watershed_basins_array = watershed_basins_array
         self.channels_array = channels_array
         self.current_watershed = None
-        self.state_buffer = deque(maxlen=5)
+        self.state_buffer = deque(maxlen=3)
         self.visited_count = defaultdict(int)
         self.start_x = 0
         self.start_y = 0
@@ -42,7 +42,7 @@ class RewardCalculator:
 
         # 물저장소에 있는 경우 큰 벌칙을 부여합니다.
         if rirsv:
-            return -10000
+            return -1000
 
         reward = -1
 
@@ -52,7 +52,7 @@ class RewardCalculator:
 
         # 도로에 있는 경우 큰 보상을 부여합니다.
         if road:
-            reward += 1000
+            reward += 100
 
         # 경사가 큰 경우 벌칙을 부여합니다.
         if slope > 0.5:
@@ -62,23 +62,23 @@ class RewardCalculator:
 
         # 물길에 있는 경우 벌칙을 부여합니다.
         if wkmstrm:
-            reward -= 50
-
+            #reward -= 50
+            reward += 20
         # 채널에 있는 경우 벌칙을 부여합니다.
         if channels:
             reward -= 5
 
         # 유역에 있는 경우 벌칙을 부여합니다.
         if watershed_basins:
-            reward -= 5
+            reward -= 100
 
-        # 시작점에서 멀어질수록 벌칙을 부여합니다.
-        reward -= 0.1 * (abs(state[0] - self.start_x) + abs(state[1] - self.start_y))
+        # 시작점에서 멀어질수록 보상을 부여합니다.
+        reward += 0.1 * (abs(state[0] - self.start_x) + abs(state[1] - self.start_y))
 
         # 현재 상태를 state_buffer에 추가합니다.
         self.state_buffer.append(state)
 
-        # state_buffer에 2개 이상의 상태가 있는 경우, 이전 상태와 현재 상태를 비교합니다.
+        # state_buffer(size 3의 deque)에 state들을 넣어 이전 상태와 현재 상태를 비교합니다.
         if len(self.state_buffer) > 1:
             for i in range(1, len(self.state_buffer)):
                 prev_state = self.state_buffer[i - 1]  # 이전 상태
@@ -86,26 +86,26 @@ class RewardCalculator:
 
                 # 이전 상태와 비교하여 보상 및 벌칙을 부여합니다.
                 if prev_state[2] > curr_state[2]:  # 이전 상태보다 고도가 낮아진 경우
-                    reward += 5
+                    reward += 10
 
                 if prev_state[6] and curr_state[6]:  # 이전 상태와 현재 상태 모두 등산 경로인 경우
                     reward += 10
 
                 if not prev_state[7] and curr_state[7]:  # 이전 상태는 도로가 없었지만 현재 상태는 도로인 경우
-                    reward += 1000
+                    reward += 100
                 if prev_state[7] and not curr_state[7]:  # 이전 상태는 도로였지만 현재 상태는 도로가 아닌 경우
-                    reward -= 1000
+                    reward -= 100
 
                 if prev_state[3] < curr_state[3]:  # 이전 상태보다 경사가 커진 경우
-                    reward -= 5
+                    reward -= 10
                 elif prev_state[3] > curr_state[3]:  # 이전 상태보다 경사가 작아진 경우
-                    reward += 5
+                    reward += 10
 
                 if prev_state[5] and curr_state[5]:  # 이전 상태와 현재 상태 모두 물길인 경우
                     reward -= 10
 
                 if prev_state[4] and not curr_state[4]:  # 이전 상태는 물저장소였지만 현재 상태는 물저장소가 아닌 경우
-                    reward += 100
+                    reward += 50
                 if prev_state[5] and not curr_state[5]:  # 이전 상태는 물길이었지만 현재 상태는 물길이 아닌 경우
                     reward += 10
                 if not prev_state[6] and curr_state[6]:  # 이전 상태는 등산 경로가 아니었지만 현재 상태는 등산 경로인 경우

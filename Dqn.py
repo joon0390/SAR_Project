@@ -26,9 +26,9 @@ class Agent:
             self.explore_ratio = 0.2
 
         if self.health_status == 'good':
-            self.stay_put_probability = 0.1
+            self.stay_put_probability = 0.05
         elif self.health_status == 'bad':
-            self.stay_put_probability = 0.5
+            self.stay_put_probability = 0.3
 
 
 class DQN(nn.Module):
@@ -52,7 +52,7 @@ def load_model(filename='dqn_model.pth', input_dim=10, output_dim=8):
     return model
 
 def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array, reward_calculator, agent, action_mode='8_directions', load_existing=False, model_filename='dqn_model.pth'):
-    state_size = 10  # 상태 크기 (9개의 요소로 구성된 튜플)
+    state_size = 10  # 상태 크기 (10개의 요소로 구성된 튜플)
     if action_mode == '8_directions':
         action_size = 8  # 행동 크기 (8개의 행동)
     elif action_mode == 'custom':
@@ -85,32 +85,35 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
         prev_path = [(x, y)]
 
         while not done and step < max_steps:
-            if np.random.uniform(0, 1) < epsilon:
-                action = np.random.randint(action_size)
+            if np.random.uniform(0, 1) < agent.stay_put_probability:
+                action = 3  # 제자리에 머무르기 (Staying Put, SP)
             else:
-                with torch.no_grad():
-                    q_values = model(state)
-                    action = torch.argmax(q_values).item()
+                if np.random.uniform(0, 1) < epsilon:
+                    action = np.random.randint(action_size)
+                else:
+                    with torch.no_grad():
+                        q_values = model(state)
+                        action = torch.argmax(q_values).item()
 
             next_x, next_y = x, y
 
             if action_mode == '8_directions':
                 if action == 0:  # 상
-                    next_x, next_y = (x - 1, y)
+                    next_x, next_y = (x - agent.speed, y)
                 elif action == 1:  # 하
-                    next_x, next_y = (x + 1, y)
+                    next_x, next_y = (x + agent.speed, y)
                 elif action == 2:  # 좌
-                    next_x, next_y = (x, y - 1)
+                    next_x, next_y = (x, y - agent.speed)
                 elif action == 3:  # 우
-                    next_x, next_y = (x, y + 1)
+                    next_x, next_y = (x, y + agent.speed)
                 elif action == 4:  # 좌상
-                    next_x, next_y = (x - 1, y - 1)
+                    next_x, next_y = (x - agent.speed, y - agent.speed)
                 elif action == 5:  # 우상
-                    next_x, next_y = (x - 1, y + 1)
+                    next_x, next_y = (x - agent.speed, y + agent.speed)
                 elif action == 6:  # 좌하
-                    next_x, next_y = (x + 1, y - 1)
+                    next_x, next_y = (x + agent.speed, y - agent.speed)
                 elif action == 7:  # 우하
-                    next_x, next_y = (x + 1, y + 1)
+                    next_x, next_y = (x + agent.speed, y + agent.speed)
             
             elif action_mode == 'custom':
                 if action == 0:  # 무작위 걷기 (Random Walking, RW)
@@ -293,29 +296,6 @@ def main():
     # 경로 시뮬레이션
     start_x, start_y = 3110, 2647
     path = simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array, agent, action_mode='custom')
-    print(f"Simulated Path: {path}")
-
-
-
-def main():
-    # 필요한 데이터 불러오기 또는 생성
-    dem_array = np.load('dem_array.npy')  # 예시로 numpy 배열 로드
-    rirsv_array = np.load('rirsv_array.npy')  # 예시로 numpy 배열 로드
-    wkmstrm_array = np.load('wkmstrm_array.npy')  # 예시로 numpy 배열 로드
-    climbpath_array = np.load('climbpath_array.npy')  # 예시로 numpy 배열 로드
-    watershed_basins_array = np.load('watershed_basins_array.npy')  # 예시로 numpy 배열 로드
-    channels_array = np.load('channels_array.npy')  # 예시로 numpy 배열 로드
-    
-    agent = Agent(age_group='young', gender='male', health_status='good')
-    model = DQN()
-    
-    # 모델 학습
-    reward_calculator = ...  # 적절히 정의된 reward_calculator
-    model = dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, watershed_basins_array, channels_array, reward_calculator, agent, action_mode='custom')
-    
-    # 경로 시뮬레이션
-    start_x, start_y = 3110, 2647
-    path = simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array, climbpath_array, watershed_basins_array, channels_array, agent, action_mode='custom')
     print(f"Simulated Path: {path}")
 
 if __name__ == "__main__":
