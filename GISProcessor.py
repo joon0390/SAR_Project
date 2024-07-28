@@ -147,7 +147,7 @@ if __name__ == "__main__":
     save_path = 'featured_dem.npy'
     np.save(save_path, featured_dem)
     print(f"Featured DEM saved to {save_path}")
-
+    
     # Process test area
     test_area_result = processor.process_shapefile(test_area)
     np.save('test_area_result.npy', test_area_result)

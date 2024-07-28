@@ -7,8 +7,13 @@ climbpath_shp_file = '/Users/heekim/Desktop/heekimjun/WiSAR/data/GIS 데이터_2
 road_shp_file = '/Users/heekim/Desktop/heekimjun/WiSAR/data/GIS 데이터_20240704/road/road_polygon.shp'
 watershed_basins_shp_file = '/Users/heekim/Desktop/heekimjun/WiSAR/data/GIS 데이터_20240704/watershed/3/validBasins3.shp'
 channels_shp_file = '/Users/heekim/Desktop/heekimjun/WiSAR/data/GIS 데이터_20240704/watershed/3/channel3.shp'
+forestroad_shp_file = '/Users/heekim/Desktop/heekimjun/WiSAR/data/GIS 데이터_20240704/forestroad/31.shp'
 q_table_file = '/Users/heekim/Documents/GitHub/SAR_Project/q_table.pkl'
 area_difference_file = "/Users/heekim/Desktop/heekimjun/WiSAR/data/GIS 데이터_20240704/area/area_difference.shp"
+hiking_shp_file = '/Users/heekim/Desktop/heekimjun/WiSAR/data/GIS 데이터_20240704/hiking/ulsan_climb_path.shp'
+test_area_file = '/Users/heekim/Desktop/heekimjun/WiSAR/data/GIS 데이터_20240704/area/area_difference.shp'
+
+test_area_npy='/Users/heekim/Desktop/heekimjun/SAR_Project_Agent/test_area_result.npy'
 
 # 하이퍼 파라미터 설정
 alpha = 0.2  # 학습률
@@ -18,8 +23,8 @@ speed = 10  # 이동 속도
 
 beta = 0.1  # 불확실성에 대한 가중치
 
-max_steps = 1000  # 최대 스텝 수
-episodes = 100  # 에피소드 수
+max_steps = 100  # 최대 스텝 수
+episodes = 10  # 에피소드 수
 simulation_max_steps = 2000 # 시뮬레이션 최대 스템
 
 target_update = 10

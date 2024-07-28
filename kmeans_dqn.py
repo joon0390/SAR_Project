@@ -8,16 +8,7 @@ import os
 from reward import RewardCalculator
 from geo_processing import GISProcessor, load_shapefiles
 from utils import show_path_with_arrows, get_random_index
-
-speed = 10  # 이동 속도
-
-max_steps = 1000  # 최대 스텝 수
-episodes = 100  # 에피소드 수
-simulation_max_steps = 2000 # 시뮬레이션 최대 스템
-
-target_update = 10
-batch_size = 16
-memory_size=10000
+from config import *
 
 # 연령, 성별, 건강 상태에 따른 설정들
 agent_config = {
@@ -292,14 +283,15 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
 
         next_x = min(max(next_x, 0), dem_array.shape[0] - 1)
         next_y = min(max(next_y, 0), dem_array.shape[1] - 1)
-
+        
         path.append((next_x, next_y))
 
         visited_count[(next_x, next_y)] += 1  # 방문 횟수 업데이트
 
         x, y = next_x, next_y
 
-        
+        # if climbpath_array[x, y]:
+        #     break
 
     return path
 
