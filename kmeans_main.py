@@ -17,12 +17,14 @@ def pixel_to_coords(row, col, transform):
 def pixel_distance_to_meters(pixel_distance, transform):
     """Convert pixel distance to meters using the transform."""
     pixel_size_x = transform[0]
-    print("pixel_size_x : ",pixel_size_x)
-    pixel_size_y = transform[4]
-    print("pixel_size_y : ",pixel_size_y)
-
     # Assuming square pixels, we use the x pixel size for conversion.
     return pixel_distance * pixel_size_x
+
+def meters_to_pixel_distance(meters, transform):
+    """Convert distance in meters to pixel distance using the transform."""
+    pixel_size_x = transform[0]
+    # Assuming square pixels, we use the x pixel size for conversion.
+    return meters / pixel_size_x
 
 if __name__ == "__main__":
     filename = 'featured_dem.npy'
@@ -95,8 +97,9 @@ if __name__ == "__main__":
     centers = kmeans.cluster_centers_
 
     # 각 클러스터의 반지름 계산 (최대 거리 사용)
-    max_radius = 100  # 최대 반지름 설정
-    radii = [min(np.max(np.linalg.norm(_path[kmeans.labels_ == i] - centers[i], axis=1)), max_radius) for i in range(3)]
+    max_radius_in_meters = 500  # 최대 반지름을 미터 단위로 설정
+    max_radius_in_pixels = meters_to_pixel_distance(max_radius_in_meters, dem_transform)  # 미터를 픽셀로 변환
+    radii = [min(np.max(np.linalg.norm(_path[kmeans.labels_ == i] - centers[i], axis=1)), max_radius_in_pixels) for i in range(3)]
 
     # 각 클러스터의 점 개수
     cluster_sizes = [np.sum(kmeans.labels_ == i) for i in range(3)]
