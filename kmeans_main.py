@@ -17,13 +17,11 @@ def pixel_to_coords(row, col, transform):
 def pixel_distance_to_meters(pixel_distance, transform):
     """Convert pixel distance to meters using the transform."""
     pixel_size_x = transform[0]
-    # Assuming square pixels, we use the x pixel size for conversion.
     return pixel_distance * pixel_size_x
 
 def meters_to_pixel_distance(meters, transform):
     """Convert distance in meters to pixel distance using the transform."""
     pixel_size_x = transform[0]
-    # Assuming square pixels, we use the x pixel size for conversion.
     return meters / pixel_size_x
 
 if __name__ == "__main__":
@@ -68,6 +66,7 @@ if __name__ == "__main__":
     epsilon_array = np.array([0.9, 0.85, 0.8, 0.75, 0.7, 0.65])
     lr_array = np.array([0.001, 0.002, 0.003, 0.004, 0.005, 0.01, 0.1])
     gamma_array = np.array([0.95, 0.9, 0.85, 0.8])
+    decay_factor = 0.95
 
     # 동일한 시작점 선택
     test_area = np.load(test_area_npy)
@@ -81,6 +80,9 @@ if __name__ == "__main__":
         lr = np.random.choice(lr_array)
         gamma = float(np.random.choice(gamma_array))
         print('epsilon :', epsilon, "lr :", lr, "gamma:", gamma)
+
+        # 에이전트 속도 감소 적용 (지수 감소 방식)
+        agent.speed = max(1, agent.speed * (decay_factor ** i))
 
         dqn_learning(dem_array, rirsv_transformed, wkmstrm_transformed, climbpath_transformed, road_transformed, watershed_basins_transformed, channels_transformed, forestroad_transformed, hiking_transformed, reward_calculator, agent, action_mode=action_mode, _lr=lr, _epsilon=epsilon, _gamma=gamma)
         
@@ -100,9 +102,7 @@ if __name__ == "__main__":
     centers = kmeans.cluster_centers_
 
     # 각 클러스터의 반지름 계산 (최대 거리 사용)
-    max_radius_in_meters = 500  # 최대 반지름을 미터 단위로 설정
-    max_radius_in_pixels = meters_to_pixel_distance(max_radius_in_meters, dem_transform)  # 미터를 픽셀로 변환
-    radii = [min(np.max(np.linalg.norm(_path[kmeans.labels_ == i] - centers[i], axis=1)), max_radius_in_pixels) for i in range(5)]
+    radii = [np.max(np.linalg.norm(_path[kmeans.labels_ == i] - centers[i], axis=1)) for i in range(5)]
 
     # 각 클러스터의 점 개수
     cluster_sizes = [np.sum(kmeans.labels_ == i) for i in range(5)]
@@ -120,10 +120,9 @@ if __name__ == "__main__":
         circle = plt.Circle((centers[i][1], centers[i][0]), radii[i], color=colors[i], fill=False, linestyle='--')
         plt.gca().add_patch(circle)
 
-        # 원의 중심점 실제 좌표로 변환하여 출력
-        center_x, center_y = pixel_to_coords(centers[i][0], centers[i][1], dem_transform)
-        radius_in_meters = pixel_distance_to_meters(radii[i], dem_transform)
-        print(f"Cluster {i+1} Center: ({center_x}, {center_y}) with {cluster_sizes[i]} points and Radius: {radius_in_meters:.2f} meters")
+        # 원의 중심점 픽셀 좌표로 출력
+        center_x, center_y = centers[i]
+        print(f"Cluster {i+1} Center: ({center_x}, {center_y}) with {cluster_sizes[i]} points and Radius: {radii[i]:.2f} pixels")
 
     # 시작점을 검정색 점으로 표시
     start_points = np.array(start_points)

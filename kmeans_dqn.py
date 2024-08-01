@@ -46,8 +46,9 @@ class Agent:
         elif self.health_status == 'bad':
             self.stay_put_probability = 0.5
 
-    def update_speed(self, episode, decay_factor=.99):
-        self.speed = max(1, self.speed * (decay_factor ** episode))
+    def update_speed(self, episode, decay_factor=0.99):
+        self.speed = max(1, self.speed * decay_factor) # 선형적 감소
+        #self.speed = max(1, self.speed * (decay_factor ** episode)) # 지수적 감소
 
 class DQN(nn.Module):
     def __init__(self, input_dim=12, output_dim=8):
@@ -96,9 +97,9 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
         x, y = np.random.randint(1, dem_array.shape[0] - 1), np.random.randint(1, dem_array.shape[1] - 1)
         reward_calculator.start_x, reward_calculator.start_y = x, y
         state = torch.tensor([x, y, reward_calculator.get_elevation(x, y), reward_calculator.calculate_slope(x, y),
-                              rirsv_array[int(x), int(y)], wkmstrm_array[int(x), int(y)], climbpath_array[int(x), int(y)],
-                              road_array[int(x), int(y)], watershed_basins_array[int(x), int(y)], channels_array[int(x), int(y)],
-                              forestroad_array[int(x), int(y)], hiking_array[int(x), int(y)]], dtype=torch.float32)
+                              rirsv_array[x, y], wkmstrm_array[x, y], climbpath_array[x, y],
+                              road_array[x, y], watershed_basins_array[x, y], channels_array[x, y],
+                              forestroad_array[x, y], hiking_array[x, y]], dtype=torch.float32)
         reward_calculator.state_buffer.clear()  # 에피소드 시작 시 버퍼 초기화
         reward_calculator.visited_count.clear()  # 방문한 좌표 초기화
         done = False
@@ -106,6 +107,8 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
         prev_path = [(x, y)]
 
         while not done and step < max_steps:
+            agent.update_speed(step)  # 각 스텝마다 속도 업데이트
+
             if np.random.uniform(0, 1) < agent.stay_put_probability:
                 action = 3  # 제자리에 머무르기 (Staying Put, SP)
             else:
@@ -120,47 +123,47 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
 
             if action_mode == '8_directions':
                 if action == 0:  # 상
-                    next_x, next_y = (x - agent.speed, y)
+                    next_x, next_y = (x - int(agent.speed), y)
                 elif action == 1:  # 하
-                    next_x, next_y = (x + agent.speed, y)
+                    next_x, next_y = (x + int(agent.speed), y)
                 elif action == 2:  # 좌
-                    next_x, next_y = (x, y - agent.speed)
+                    next_x, next_y = (x, y - int(agent.speed))
                 elif action == 3:  # 우
-                    next_x, next_y = (x, y + agent.speed)
+                    next_x, next_y = (x, y + int(agent.speed))
                 elif action == 4:  # 좌상
-                    next_x, next_y = (x - agent.speed, y - agent.speed)
+                    next_x, next_y = (x - int(agent.speed), y - int(agent.speed))
                 elif action == 5:  # 우상
-                    next_x, next_y = (x - agent.speed, y + agent.speed)
+                    next_x, next_y = (x - int(agent.speed), y + int(agent.speed))
                 elif action == 6:  # 좌하
-                    next_x, next_y = (x + agent.speed, y - agent.speed)
+                    next_x, next_y = (x + int(agent.speed), y - int(agent.speed))
                 elif action == 7:  # 우하
-                    next_x, next_y = (x + agent.speed, y + agent.speed)
+                    next_x, next_y = (x + int(agent.speed), y + int(agent.speed))
             
             elif action_mode == 'custom':
                 if action == 0:  # 무작위 걷기 (Random Walking, RW)
-                    next_x, next_y = (x + np.random.choice([-agent.speed, agent.speed]), y + np.random.choice([-agent.speed, agent.speed]))
+                    next_x, next_y = (x + np.random.choice([-int(agent.speed), int(agent.speed)]), y + np.random.choice([-int(agent.speed), int(agent.speed)]))
                 elif action == 1:  # 경로 여행 (Route Traveling, RT)
-                    if climbpath_array[int(x), int(y)]:
-                        next_x, next_y = (x + np.random.choice([-agent.speed, agent.speed]), y)
+                    if climbpath_array[x, y]:
+                        next_x, next_y = (x + np.random.choice([-int(agent.speed), int(agent.speed)]), y)
                     else:
-                        next_x, next_y = (x, y + np.random.choice([-agent.speed, agent.speed]))
+                        next_x, next_y = (x, y + np.random.choice([-int(agent.speed), int(agent.speed)]))
                 elif action == 2:  # 방향 여행 (Direction Traveling, DT)
                     direction = np.random.choice(['up', 'down', 'left', 'right'])
                     if direction == 'up':
-                        next_x, next_y = (max(1, x - agent.speed), y)
+                        next_x, next_y = (max(1, x - int(agent.speed)), y)
                     elif direction == 'down':
-                        next_x, next_y = (min(dem_array.shape[0] - 2, x + agent.speed), y)
+                        next_x, next_y = (min(dem_array.shape[0] - 2, x + int(agent.speed)), y)
                     elif direction == 'left':
-                        next_x, next_y = (x, max(1, y - agent.speed))
+                        next_x, next_y = (x, max(1, y - int(agent.speed)))
                     elif direction == 'right':
-                        next_x, next_y = (x, min(dem_array.shape[1] - 2, y + agent.speed))
+                        next_x, next_y = (x, min(dem_array.shape[1] - 2, y + int(agent.speed)))
                 elif action == 3:  # 제자리에 머무르기 (Staying Put, SP)
                     next_x, next_y = x, y
                 elif action == 4:  # 시야 확보 (View Enhancing, VE)
                     highest_elevation = reward_calculator.get_elevation(x, y)
                     highest_coord = (x, y)
-                    for i in range(-agent.speed, agent.speed + 1):
-                        for j in range(-agent.speed, agent.speed + 1):
+                    for i in range(-int(agent.speed), int(agent.speed) + 1):
+                        for j in range(-int(agent.speed), int(agent.speed) + 1):
                             if 0 <= x + i < dem_array.shape[0] and 0 <= y + j < dem_array.shape[1]:
                                 elevation = reward_calculator.get_elevation(x + i, y + j)
                                 if elevation > highest_elevation:
@@ -174,9 +177,9 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
             next_y = min(max(next_y, 0), dem_array.shape[1] - 1)
 
             next_state = torch.tensor([next_x, next_y, reward_calculator.get_elevation(next_x, next_y), reward_calculator.calculate_slope(next_x, next_y),
-                                       rirsv_array[int(next_x), int(next_y)], wkmstrm_array[int(next_x), int(next_y)], climbpath_array[int(next_x), int(next_y)],
-                                       road_array[int(next_x), int(next_y)], watershed_basins_array[int(next_x), int(next_y)], channels_array[int(next_x), int(next_y)],
-                                       forestroad_array[int(next_x), int(next_y)], hiking_array[int(next_x), int(next_y)]], dtype=torch.float32)
+                                       rirsv_array[next_x, next_y], wkmstrm_array[next_x, next_y], climbpath_array[next_x, next_y],
+                                       road_array[next_x, next_y], watershed_basins_array[next_x, next_y], channels_array[next_x, next_y],
+                                       forestroad_array[next_x, next_y], hiking_array[next_x, next_y]], dtype=torch.float32)
 
             reward = reward_calculator.reward_function(next_state)
 
@@ -207,7 +210,7 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
 
             step += 1
 
-            if climbpath_array[int(x), int(y)] or step >= max_steps:
+            if climbpath_array[x, y] or step >= max_steps:
                 done = True
 
         epsilon = max(epsilon_end, epsilon * epsilon_decay)
@@ -215,6 +218,7 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
     save_model(model, filename=model_filename)
 
     return model
+
 
 def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array, forestroad_array, hiking_array, agent, action_mode='8_directions'):
     path = [(int(start_x), int(start_y))]
@@ -224,6 +228,8 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
     visited_count = defaultdict(int)  # 방문한 좌표와 그 횟수를 저장할 딕셔너리
 
     for step in range(max_steps):
+        agent.update_speed(step)  # 각 스텝마다 속도 업데이트
+
         state = torch.tensor([x, y, get_elevation(dem_array, x, y), calculate_slope(dem_array, x, y),
                               rirsv_array[x, y], wkmstrm_array[x, y], climbpath_array[x, y],
                               road_array[x, y], watershed_basins_array[x, y], channels_array[x, y],
@@ -235,40 +241,40 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
 
         if action_mode == '8_directions':
             if action == 0:  # 상
-                next_x, next_y = (x - agent.speed, y)
+                next_x, next_y = (x - int(agent.speed), y)
             elif action == 1:  # 하
-                next_x, next_y = (x + agent.speed, y)
+                next_x, next_y = (x + int(agent.speed), y)
             elif action == 2:  # 좌
-                next_x, next_y = (x, y - agent.speed)
+                next_x, next_y = (x, y - int(agent.speed))
             elif action == 3:  # 우
-                next_x, next_y = (x, y + agent.speed)
+                next_x, next_y = (x, y + int(agent.speed))
             elif action == 4:  # 좌상
-                next_x, next_y = (x - agent.speed, y - agent.speed)
+                next_x, next_y = (x - int(agent.speed), y - int(agent.speed))
             elif action == 5:  # 우상
-                next_x, next_y = (x - agent.speed, y + agent.speed)
+                next_x, next_y = (x - int(agent.speed), y + int(agent.speed))
             elif action == 6:  # 좌하
-                next_x, next_y = (x + agent.speed, y - agent.speed)
+                next_x, next_y = (x + int(agent.speed), y - int(agent.speed))
             elif action == 7:  # 우하
-                next_x, next_y = (x + agent.speed, y + agent.speed)
+                next_x, next_y = (x + int(agent.speed), y + int(agent.speed))
 
         elif action_mode == 'custom':
             if action == 0:  # 무작위 걷기 (Random Walking, RW)
-                next_x, next_y = (x + np.random.choice([-agent.speed, agent.speed]), y + np.random.choice([-agent.speed, agent.speed]))
+                next_x, next_y = (x + np.random.choice([-int(agent.speed), int(agent.speed)]), y + np.random.choice([-int(agent.speed), int(agent.speed)]))
             elif action == 1:  # 경로 여행 (Route Traveling, RT)
-                if climbpath_array[int(x), int(y)]:
-                    next_x, next_y = (x + np.random.choice([-agent.speed, agent.speed]), y)
+                if climbpath_array[x, y]:
+                    next_x, next_y = (x + np.random.choice([-int(agent.speed), int(agent.speed)]), y)
                 else:
-                    next_x, next_y = (x, y + np.random.choice([-agent.speed, agent.speed]))
+                    next_x, next_y = (x, y + np.random.choice([-int(agent.speed), int(agent.speed)]))
             elif action == 2:  # 방향 여행 (Direction Traveling, DT)
                 direction = np.random.choice(['up', 'down', 'left', 'right'])
                 if direction == 'up':
-                    next_x, next_y = (max(1, x - agent.speed), y)
+                    next_x, next_y = (max(1, x - int(agent.speed)), y)
                 elif direction == 'down':
-                    next_x, next_y = (min(dem_array.shape[0] - 2, x + agent.speed), y)
+                    next_x, next_y = (min(dem_array.shape[0] - 2, x + int(agent.speed)), y)
                 elif direction == 'left':
-                    next_x, next_y = (x, max(1, y - agent.speed))
+                    next_x, next_y = (x, max(1, y - int(agent.speed)))
                 elif direction == 'right':
-                    next_x, next_y = (x, min(dem_array.shape[1] - 2, y + agent.speed))
+                    next_x, next_y = (x, min(dem_array.shape[1] - 2, y + int(agent.speed)))
             elif action == 3:  # 제자리에 머무르기 (Staying Put, SP)
                 next_x, next_y = x, y
             elif action == 4:  # 시야 확보 (View Enhancing, VE)
@@ -294,10 +300,11 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
 
         x, y = next_x, next_y
 
-        # if climbpath_array[int(x), int(y)]:
+        # if climbpath_array[x, y]:
         #     break
 
     return path
+
 
 
 '''
