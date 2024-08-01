@@ -48,5 +48,5 @@
 
 2. install dependencies
    ```
-   pip install -r requirements.txt
+   pip install -r requirement.txt
    ``` 
