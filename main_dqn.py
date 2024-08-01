@@ -36,13 +36,8 @@ if __name__ == "__main__":
     # Agent 인스턴스 생성
     agent = Agent(age_group='young', gender='male', health_status='good')
 
-   # 학습 반복
-    for iteration in range(num_iterations):
-        print(f"Starting iteration {iteration + 1}/{num_iterations}")
-        
-        # DQN 학습 수행
-        dqn_learning(dem_array, rirsv_transformed, wkmstrm_transformed, climbpath_transformed, road_transformed, watershed_basins_transformed, channels_transformed, reward_calculator, agent, action_mode=action_mode)
-
+    dqn_learning(dem_array, rirsv_transformed, wkmstrm_transformed, climbpath_transformed, road_transformed, watershed_basins_transformed, channels_transformed, reward_calculator, agent, action_mode=action_mode)
+j
     # 경로 시뮬레이션 예시
     test_area = np.load(filename)
     coord = get_random_index(test_area)
