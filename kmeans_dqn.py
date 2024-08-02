@@ -63,7 +63,7 @@ def load_losses_from_json(filename='losses.json'):
         all_losses = json.load(f)
     return all_losses
 
-def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array, forestroad_array, hiking_array, reward_calculator, agent, action_mode='8_directions', load_existing=False, model_filename='dqn_model.pth', _lr=0.001, _epsilon=0.9, _gamma=0.9, reward_function_index=1):
+def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array, forestroad_array, hiking_array, reward_calculator, agent, action_mode='8_directions', load_existing=False, model_filename='dqn_model.pth', _lr=0.001, _gamma=0.9, reward_function_index=1):
     state_size = 12 # 상태 크기 (12개의 요소로 구성된 튜플)
     if action_mode == '8_directions':
         action_size = 8  # 행동 크기 (8개의 행동)
@@ -79,7 +79,7 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
     optimizer = optim.Adam(model.parameters(), lr=_lr)
     criterion = nn.MSELoss()
     gamma = _gamma  # 할인 인자
-    epsilon_start = _epsilon
+    epsilon_start = agent.explore_ratio
     epsilon_end = 0.1
     epsilon_decay = 0.95
     epsilon = epsilon_start

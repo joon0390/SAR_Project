@@ -86,7 +86,7 @@ if __name__ == "__main__":
         # 에이전트 속도 감소 적용 (지수 감소 방식)
         agent.speed = max(1, agent.speed * decay_factor)
 
-        model, all_losses = dqn_learning(dem_array, rirsv_transformed, wkmstrm_transformed, climbpath_transformed, road_transformed, watershed_basins_transformed, channels_transformed, forestroad_transformed, hiking_transformed, reward_calculator, agent, action_mode=action_mode, load_existing = False, model_filename = 'dqn_model.pth',_lr=lr, _epsilon=epsilon, _gamma=gamma, reward_function_index=reward_function_index)
+        model, all_losses = dqn_learning(dem_array, rirsv_transformed, wkmstrm_transformed, climbpath_transformed, road_transformed, watershed_basins_transformed, channels_transformed, forestroad_transformed, hiking_transformed, reward_calculator, agent, action_mode=action_mode, load_existing = False, model_filename = 'dqn_model.pth',_lr=lr, _gamma=gamma, reward_function_index=reward_function_index)
         
         model = load_model('dqn_model.pth', input_dim=12, output_dim=8 if action_mode == '8_directions' else 5)
         path = simulate_path(start_x, start_y, model, dem_array, rirsv_transformed, wkmstrm_transformed, climbpath_transformed, road_transformed, watershed_basins_transformed, channels_transformed, forestroad_transformed, hiking_transformed, agent, action_mode=action_mode)
