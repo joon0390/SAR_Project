@@ -2,7 +2,8 @@ import os
 import numpy as np
 from geo_processing import GISProcessor, load_shapefiles
 from reward import RewardCalculator
-from kmeans_dqn import dqn_learning, simulate_path, load_model, Agent, DQN
+from kmeans_dqn import dqn_learning, simulate_path, load_model, Agent, DQN, plot_loss
+
 from utils import show_path_with_arrows, get_random_index
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
@@ -64,10 +65,10 @@ if __name__ == "__main__":
     start_points = []
     index = 100 # 임의로 100번째 step 위치
     epsilon_array = np.array([0.9, 0.85, 0.8, 0.75, 0.7, 0.65])
-    lr_array = np.array([0.001, 0.002, 0.003, 0.004, 0.005, 0.01, 0.1])
-    gamma_array = np.array([0.95, 0.9, 0.85, 0.8])
+    lr_array = np.array([0.001, 0.002, 0.003, 0.004, 0.005])
+    gamma_array = np.array([0.99, 0.97, 0.95, 0.93])
     decay_factor = 0.95
-
+    reward_function_index = 5
     # 동일한 시작점 선택
     test_area = np.load(test_area_npy)
     coord = get_random_index(test_area)
@@ -84,7 +85,7 @@ if __name__ == "__main__":
         # 에이전트 속도 감소 적용 (지수 감소 방식)
         agent.speed = max(1, agent.speed * (decay_factor ** i))
 
-        dqn_learning(dem_array, rirsv_transformed, wkmstrm_transformed, climbpath_transformed, road_transformed, watershed_basins_transformed, channels_transformed, forestroad_transformed, hiking_transformed, reward_calculator, agent, action_mode=action_mode, _lr=lr, _epsilon=epsilon, _gamma=gamma)
+        model, all_losses = dqn_learning(dem_array, rirsv_transformed, wkmstrm_transformed, climbpath_transformed, road_transformed, watershed_basins_transformed, channels_transformed, forestroad_transformed, hiking_transformed, reward_calculator, agent, action_mode=action_mode, load_existing = False, model_filename = 'dqn_model.pth',_lr=lr, _epsilon=epsilon, _gamma=gamma, reward_function_index=reward_function_index)
         
         model = load_model('dqn_model.pth', input_dim=12, output_dim=8 if action_mode == '8_directions' else 6)
         path = simulate_path(start_x, start_y, model, dem_array, rirsv_transformed, wkmstrm_transformed, climbpath_transformed, road_transformed, watershed_basins_transformed, channels_transformed, forestroad_transformed, hiking_transformed, agent, action_mode=action_mode)
@@ -94,25 +95,26 @@ if __name__ == "__main__":
 
     _path = np.array(_path)
 
+    colors = ['r', 'g', 'b']
+
     # _path를 K-means 클러스터링
-    kmeans = KMeans(n_clusters=5, n_init=10)
+    kmeans = KMeans(n_clusters=len(colors), n_init=10)
     kmeans.fit(_path)
 
     # 클러스터 중심 계산
     centers = kmeans.cluster_centers_
 
     # 각 클러스터의 반지름 계산 (최대 거리 사용)
-    radii = [np.max(np.linalg.norm(_path[kmeans.labels_ == i] - centers[i], axis=1)) for i in range(5)]
+    radii = [np.max(np.linalg.norm(_path[kmeans.labels_ == i] - centers[i], axis=1)) for i in range(len(colors))]
 
     # 각 클러스터의 점 개수
-    cluster_sizes = [np.sum(kmeans.labels_ == i) for i in range(5)]
+    cluster_sizes = [np.sum(kmeans.labels_ == i) for i in range(len(colors))]
     
     # 클러스터 시각화
     plt.figure(figsize=(10, 10))
     plt.imshow(dem_array, cmap='terrain')
 
-    colors = ['r', 'g', 'b', 'w', 'y']
-    for i in range(5):
+    for i in range(len(colors)):
         cluster_points = _path[kmeans.labels_ == i]
         plt.scatter(cluster_points[:, 1], cluster_points[:, 0], c=colors[i], label=f'Cluster {i+1} ({cluster_sizes[i]} points)')
         
@@ -120,9 +122,10 @@ if __name__ == "__main__":
         circle = plt.Circle((centers[i][1], centers[i][0]), radii[i], color=colors[i], fill=False, linestyle='--')
         plt.gca().add_patch(circle)
 
-        # 원의 중심점 픽셀 좌표로 출력
-        center_x, center_y = centers[i]
-        print(f"Cluster {i+1} Center: ({center_x}, {center_y}) with {cluster_sizes[i]} points and Radius: {radii[i]:.2f} pixels")
+        # 원의 중심점과 반지름을 미터로 변환하여 출력
+        center_x_meters, center_y_meters = pixel_to_coords(centers[i][0], centers[i][1], dem_transform)
+        radius_in_meters = pixel_distance_to_meters(radii[i], dem_transform)
+        print(f"Cluster {i+1} Center: ({centers[i][1]}, {centers[i][0]}) with {cluster_sizes[i]} points and Radius: {radius_in_meters:.2f} meters")
 
     # 시작점을 검정색 점으로 표시
     start_points = np.array(start_points)
@@ -131,3 +134,5 @@ if __name__ == "__main__":
     plt.title('K-means Clustering of Paths')
     plt.legend()
     plt.show()
+    
+    plot_loss(all_losses)
