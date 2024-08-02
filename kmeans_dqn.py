@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 from utils import get_elevation, calculate_slope
 from collections import defaultdict  # 추가
-import os
+import os, json
 from reward import RewardCalculator
 from geo_processing import GISProcessor, load_shapefiles
 from utils import show_path_with_arrows, get_random_index
@@ -24,15 +24,12 @@ class Agent:
             self.explore_ratio = 0.8
         elif self.age_group == 'middle':
             self.speed = 2
-            self.explore_ratio = 0.5
+            self.explore_ratio = 0.6
         elif self.age_group == 'old':
             self.speed = 1
             self.explore_ratio = 0.2
 
-        if self.health_status == 'good':
-            self.stay_put_probability = 0.1
-        elif self.health_status == 'bad':
-            self.stay_put_probability = 0.5
+        self.stay_put_probability = 0.0  # 제자리에 머무는 확률을 0으로 설정
 
     def update_speed(self, step, decay_factor=0.99):
         self.speed = max(1, self.speed * (decay_factor ** step)) # step에 따른 지수적 감소
@@ -57,12 +54,21 @@ def load_model(filename='dqn_model.pth', input_dim=12, output_dim=8):
     model.load_state_dict(torch.load(filename))
     return model
 
+def save_losses_to_json(all_losses, filename='losses.json'):
+    with open(filename, 'w') as f:
+        json.dump(all_losses, f)
+
+def load_losses_from_json(filename='losses.json'):
+    with open(filename, 'r') as f:
+        all_losses = json.load(f)
+    return all_losses
+
 def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array, forestroad_array, hiking_array, reward_calculator, agent, action_mode='8_directions', load_existing=False, model_filename='dqn_model.pth', _lr=0.001, _epsilon=0.9, _gamma=0.9, reward_function_index=1):
     state_size = 12 # 상태 크기 (12개의 요소로 구성된 튜플)
     if action_mode == '8_directions':
         action_size = 8  # 행동 크기 (8개의 행동)
     elif action_mode == 'custom':
-        action_size = 6  # 행동 크기 (6개의 행동)
+        action_size = 5  # 행동 크기 (5개의 행동)
     
     if load_existing and os.path.exists(model_filename):
         model = load_model(model_filename, state_size, action_size)
@@ -117,15 +123,12 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
         while not done and step < max_steps:
             agent.update_speed(step)  # step에 따라 속도 감소
 
-            if np.random.uniform(0, 1) < agent.stay_put_probability:
-                action = 3  # 제자리에 머무르기 (Staying Put, SP)
+            if np.random.uniform(0, 1) < epsilon:
+                action = np.random.randint(action_size)
             else:
-                if np.random.uniform(0, 1) < epsilon:
-                    action = np.random.randint(action_size)
-                else:
-                    with torch.no_grad():
-                        q_values = model(state)
-                        action = torch.argmax(q_values).item()
+                with torch.no_grad():
+                    q_values = model(state)
+                    action = torch.argmax(q_values).item()
 
             next_x, next_y = x, y
 
@@ -146,7 +149,6 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
                     next_x, next_y = (x + agent.speed, y - agent.speed)
                 elif action == 7:  # 우하
                     next_x, next_y = (x + agent.speed, y + agent.speed)
-            
             elif action_mode == 'custom':
                 if action == 0:  # 무작위 걷기 (Random Walking, RW)
                     next_x, next_y = (x + np.random.choice([-agent.speed, agent.speed]), y + np.random.choice([-agent.speed, agent.speed]))
@@ -165,9 +167,7 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
                         next_x, next_y = (x, max(1, y - agent.speed))
                     elif direction == 'right':
                         next_x, next_y = (x, min(dem_array.shape[1] - 2, y + agent.speed))
-                elif action == 3:  # 제자리에 머무르기 (Staying Put, SP)
-                    next_x, next_y = x, y
-                elif action == 4:  # 시야 확보 (View Enhancing, VE)
+                elif action == 3:  # 시야 확보 (View Enhancing, VE)
                     highest_elevation = reward_calculator.get_elevation(x, y)
                     highest_coord = (x, y)
                     for i in range(-int(agent.speed), int(agent.speed) + 1):
@@ -178,7 +178,7 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
                                     highest_elevation = elevation
                                     highest_coord = (x + i, y + j)
                     next_x, next_y = highest_coord
-                elif action == 5 and len(prev_path) > 1:  # 되돌아가기 (Backtracking, BT)
+                elif action == 4 and len(prev_path) > 1:  # 되돌아가기 (Backtracking, BT)
                     next_x, next_y = prev_path[-2]
 
             next_x = int(min(max(next_x, 0), dem_array.shape[0] - 1))
@@ -226,22 +226,22 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
             if climbpath_array[int(x), int(y)] or step >= max_steps:
                 done = True
 
-        all_losses.append(np.mean(episode_losses))  # 에피소드의 평균 손실 저장
+        all_losses.append(episode_losses) # 에피소드의 손실 저장
 
         epsilon = max(epsilon_end, epsilon * epsilon_decay)
 
     save_model(model, filename=model_filename)
+    save_losses_to_json(all_losses, filename='losses.json')  # 손실을 JSON 파일로 저장
 
     return model, all_losses
 
 def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array, forestroad_array, hiking_array, agent, action_mode='8_directions'):
     path = [(int(start_x), int(start_y))]
     x, y = int(start_x), int(start_y)
-    max_steps = simulation_max_steps
 
     visited_count = defaultdict(int)  # 방문한 좌표와 그 횟수를 저장할 딕셔너리
 
-    for step in range(max_steps):
+    for step in range(simulation_max_steps):
         state = torch.tensor([x, y, get_elevation(dem_array, x, y), calculate_slope(dem_array, x, y),
                               rirsv_array[x, y], wkmstrm_array[x, y], climbpath_array[x, y],
                               road_array[x, y], watershed_basins_array[x, y], channels_array[x, y],
@@ -270,26 +270,28 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
                 next_x, next_y = (x + agent.speed, y + agent.speed)
 
         elif action_mode == 'custom':
+            
             if action == 0:  # 무작위 걷기 (Random Walking, RW)
-                next_x, next_y = (x + np.random.choice([-agent.speed, agent.speed]), y + np.random.choice([-agent.speed, int(agent.speed)]))
+                next_x, next_y = (x + np.random.choice([-agent.speed, agent.speed]), y + np.random.choice([-agent.speed, agent.speed]))
+            
             elif action == 1:  # 경로 여행 (Route Traveling, RT)
                 if climbpath_array[int(x), int(y)]:
                     next_x, next_y = (x + np.random.choice([-agent.speed, agent.speed]), y)
                 else:
                     next_x, next_y = (x, y + np.random.choice([-agent.speed, agent.speed]))
+            
             elif action == 2:  # 방향 여행 (Direction Traveling, DT)
                 direction = np.random.choice(['up', 'down', 'left', 'right'])
                 if direction == 'up':
                     next_x, next_y = (max(1, x - agent.speed), y)
                 elif direction == 'down':
-                    next_x, next_y = (min(dem_array.shape[0] - 2, x + agent.speed)), y
+                    next_x, next_y = (min(dem_array.shape[0] - 2, x + agent.speed), y)
                 elif direction == 'left':
                     next_x, next_y = (x, max(1, y - agent.speed))
                 elif direction == 'right':
-                    next_x, next_y = (x, min(y + agent.speed, dem_array.shape[1] - 1))
-            elif action == 3:  # 제자리에 머무르기 (Staying Put, SP)
-                next_x, next_y = x, y
-            elif action == 4:  # 시야 확보 (View Enhancing, VE)
+                    next_x, next_y = (x, min(dem_array.shape[1] - 2, y + agent.speed))
+            
+            elif action == 3:  # 시야 확보 (View Enhancing, VE)
                 highest_elevation = 0
                 highest_coord = (x, y)
                 for i in range(-1, 2):
@@ -300,7 +302,8 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
                                 highest_elevation = elevation
                                 highest_coord = (x + i, y + j)
                 next_x, next_y = highest_coord
-            elif action == 5 and len(path) > 1:  # 되돌아가기 (Backtracking, BT)
+
+            elif action == 4 and len(path) > 1:  # 되돌아가기 (Backtracking, BT)
                 next_x, next_y = path[-2]
 
         next_x = int(min(max(next_x, 0), dem_array.shape[0] - 1))
@@ -318,11 +321,13 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
     return path
 
 # 학습 후 손실 시각화
-def plot_loss(all_losses):
+def plot_loss_from_json(filename='losses.json'):
+    all_losses = load_losses_from_json(filename)
+    flattened_losses = [loss for episode_losses in all_losses for loss in episode_losses]
     plt.figure(figsize=(10, 5))
-    plt.plot(all_losses, label='Loss')
-    plt.xlabel('Episode')
+    plt.plot(flattened_losses, label='Loss')
+    plt.xlabel('Step')
     plt.ylabel('Loss')
-    plt.title('Training Loss over Episodes')
+    plt.title('Training Loss over Steps')
     plt.legend()
     plt.show()

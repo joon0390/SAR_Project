@@ -20,11 +20,10 @@ alpha = 0.2  # 학습률
 gamma = 0.9  # 할인 인자
 epsilon = 0.9  # 탐험 vs 활용 비율
 speed = 10  # 이동 속도
-
 beta = 0.1  # 불확실성에 대한 가중치
 
-max_steps = 100  # 최대 스텝 수
-episodes = 10  # 에피소드 수
+max_steps = 1000  # 최대 스텝 수
+episodes = 50  # 에피소드 수
 simulation_max_steps = 2000 # 시뮬레이션 최대 스템
 
 target_update = 10
