@@ -64,16 +64,19 @@ if __name__ == "__main__":
     agent = Agent(age_group='young', gender='male', health_status='good')
     _path = []
     paths = []
-    index = 3 #임의로 100번째 step 위치
+    index = 10 #임의로 100번째 step 위치
+
     epsilon_array = np.array([0.9,0.85,0.8,0.75,0.7])
+    
     lr_array = np.array([0.001,0.005,0.01])
+    
     gamma_array = np.array([0.9,0.8])
-    len_path = []
 
     reward_function_index = 1
     test_area = np.load(test_area_npy)
     coord = get_random_index(test_area)
     start_x, start_y = coord[0], coord[1]
+
     th = 1
     for epsilon in epsilon_array:
         for lr in lr_array:
@@ -86,13 +89,13 @@ if __name__ == "__main__":
                 
                 # 경로 시뮬레이션 예시
                 
-                
 
-                model = load_model('dqn_model.pth', input_dim=12, output_dim=8 if action_mode == '8_directions' else 6)
+
+                model = load_model('dqn_model.pth', input_dim=12, output_dim=8 if action_mode == '8_directions' else 5)
                 path = simulate_path(start_x, start_y, model, dem_array, rirsv_transformed, wkmstrm_transformed, climbpath_transformed, road_transformed, watershed_basins_transformed, channels_transformed, forestroad_transformed,hiking_transformed,agent, action_mode=action_mode)
                 paths.append(path)
                 _path.append(path[index-1]) #path에서 index번째 추가
-                print("---------------",th+1,"번째 model의 path","-------------------------")
+                print("---------------",th,"번째 model의 path","-------------------------")
                 th+= 1
     
     _path = np.array(_path)
@@ -155,20 +158,4 @@ if __name__ == "__main__":
     plt.show()
 
     plot_loss_from_json('losses.json')
-    # colors = ['r', 'g', 'b']
-    # for i in range(3):        
-    #     # 원 추가
-
-    #     # 원의 중심점 실제 좌표로 변환하여 출력
-    #     center_x, center_y = pixel_to_coords(centers[i][0], centers[i][1], dem_transform)
-    #     radius_in_meters = pixel_distance_to_meters(radii[i], dem_transform)
-    #     print(f"Cluster {i+1} Center: ({center_x}, {center_y}) with {cluster_sizes[i]} points and Radius: {radius_in_meters:.2f} meters")
-
-    # plt.title('K-means Clustering of Paths')
-    # plt.legend()
-    # plt.show()
-
-    #     plot_loss_from_json('/Users/heekim/Desktop/heekimjun/SAR_Project_Agent/losses.json')
-
-
-
+  
