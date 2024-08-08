@@ -147,7 +147,9 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
 
         episode_losses = []  # 각 에피소드의 손실을 저장할 리스트
 
+        a = 0
         while not done and step < max_steps:
+            
             agent.update_speed(step)
 
             
@@ -158,9 +160,18 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
                         q_values = model(state)
                         action = torch.argmax(q_values).item()
 
+            
             next_x, next_y = x, y
 
+            if a== 0:
+                action = action
+            else :
+                if action_mode =='8_directions' :
+                    action  = np.random.choice(np.arange(0,8)[np.arange(8)!=action])
+                else : 
+                    action  = np.random.choice(np.arange(0,5)[np.arange(5)!=action])
             # 행동에 따른 다음 위치 계산
+            
             if action_mode == '8_directions':
                 if action == 0:  # 상
                     next_x, next_y = (x - agent.speed, y)
@@ -197,9 +208,8 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
                         next_x, next_y = (x, max(1, y - agent.speed))
                     elif direction == 'right':
                         next_x, next_y = (x, min(dem_array.shape[1] - 2, y + agent.speed))
-                elif action == 3:  # 제자리에 머무르기 (Staying Put, SP)
-                    next_x, next_y = x, y
-                elif action == 4:  # 시야 확보 (View Enhancing, VE)
+
+                elif action == 3:  # 시야 확보 (View Enhancing, VE)
                     highest_elevation = reward_calculator.get_elevation(x, y)
                     highest_coord = (x, y)
                     for i in range(-agent.speed, agent.speed + 1):
@@ -210,15 +220,17 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
                                     highest_elevation = elevation
                                     highest_coord = (x + i, y + j)
                     next_x, next_y = highest_coord
-                elif action == 5 and len(prev_path) > 1:  # 되돌아가기 (Backtracking, BT)
+                elif action == 4 and len(prev_path) > 1:  # 되돌아가기 (Backtracking, BT)
                     next_x, next_y = prev_path[-2]
-
+            
             next_x = int(min(max(next_x, 0), dem_array.shape[0] - 1))
             next_y = int(min(max(next_y, 0), dem_array.shape[1] - 1))
 
             if rirsv_array[next_x, next_y] == 1 or channels_array[next_x, next_y]==1 or wkmstrm_array[next_x, next_y]==1 :
+                a = 1
                 continue
             else :
+                a = 0
                 next_state = torch.tensor([next_x, next_y, reward_calculator.get_elevation(next_x, next_y), reward_calculator.calculate_slope(next_x, next_y),
                                        rirsv_array[next_x, next_y], wkmstrm_array[next_x, next_y], climbpath_array[next_x, next_y],
                                        road_array[next_x, next_y], watershed_basins_array[next_x, next_y], channels_array[next_x, next_y],
@@ -278,13 +290,15 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
 
 
 def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array, forestroad_array, hiking_array, agent, action_mode='8_directions'):
+    
     path = [(int(start_x), int(start_y))]
+    
     x, y = int(start_x), int(start_y)
 
     step = 0
 
     visited_count = defaultdict(int)  # 방문한 좌표와 그 횟수를 저장할 딕셔너리
-
+    a = 0
     while(step < simulation_max_steps):
         state = torch.tensor([x, y, get_elevation(dem_array, x, y), calculate_slope(dem_array, x, y),
                               rirsv_array[x, y], wkmstrm_array[x, y], climbpath_array[x, y],
@@ -292,7 +306,17 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
                               forestroad_array[x, y], hiking_array[x, y]], dtype=torch.float32)
         with torch.no_grad():
             action = torch.argmax(model(state)).item()
-
+        
+        if a== 0:
+            action = action
+        else :
+            if action_mode =='8_directions' :
+                action  = np.random.choice(np.arange(0,8)[np.arange(8)!=action])
+            else : 
+                action  = np.random.choice(np.arange(0,5)[np.arange(5)!=action])
+        
+        
+        
 
         if action_mode == '8_directions':
             if action == 0:  # 상
@@ -355,8 +379,10 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
         next_y = int(min(max(next_y, 0), dem_array.shape[1] - 1))
 
         if rirsv_array[next_x, next_y] == 1 or channels_array[next_x, next_y]==1 or wkmstrm_array[next_x, next_y]==1:  # 이동한 위치가 저수지인 경우
+            a = 1
             continue  # 다른 방향으로 이동하도록 함
-
+        else :
+            a = 0
         path.append((next_x, next_y))
 
         visited_count[(next_x, next_y)] += 1  # 방문 횟수 업데이트
