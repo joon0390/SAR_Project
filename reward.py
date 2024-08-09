@@ -120,10 +120,10 @@ class RewardCalculator:
         reward = -1
 
         if climbpath:
-            reward += 70
+            reward += 7000
 
         if road:
-            reward += 200
+            reward += 20000
 
         if slope > 0.5:
             reward -= 15
@@ -131,7 +131,7 @@ class RewardCalculator:
             reward += 15
             
         if forestroad:
-            reward += 1000
+            reward += 10000
 
         if hiking:
             reward += 50
@@ -152,9 +152,9 @@ class RewardCalculator:
                     reward += 20
 
                 if not prev_state[7] and curr_state[7]: #길 o -> 길o
-                    reward += 200
+                    reward += 2000
                 if prev_state[7] and not curr_state[7]: # 길o -> 길x
-                    reward -= 200
+                    reward -= 500
 
                 if prev_state[3] < curr_state[3]: # 경사 높아진 경우
                     reward -= 5
