@@ -2,7 +2,7 @@ import os
 import numpy as np
 from geo_processing import GISProcessor, load_shapefiles
 from reward import RewardCalculator
-from kmeans_dqn import dqn_learning, simulate_path, load_model, Agent, DQN, plot_loss_from_json
+from kmeans_dqn import dqn_learning, simulate_path, load_model, Agent, plot_loss_from_json
 
 from utils import show_path_with_arrows, get_random_index
 from sklearn.cluster import KMeans
@@ -30,7 +30,7 @@ if __name__ == "__main__":
     test_area_npy = 'test_area_result.npy'
 
     # .npy 파일을 로드
-    if os.path.exists(filename):
+    if (os.path.exists(filename)):
         combined_array = np.load(filename)
         print(f"Loaded combined array from {filename}")
         print(f"Combined array shape: {combined_array.shape}")
@@ -63,9 +63,9 @@ if __name__ == "__main__":
     _path = []
     paths = []
     start_points = []
-    index = 100 # 임의로 100번째 step 위치
-    epsilon_array = np.array([0.9, 0.85, 0.8, 0.75, 0.7, 0.65])
-    lr_array = np.array([0.001, 0.002, 0.003, 0.004, 0.005])
+    index = 100  # 임의로 100번째 step 위치
+    epsilon_array = np.array([0.9, 0.85, 0.8, 0.75, 0.7])
+    lr_array = np.array([0.001, 0.002, 0.003, 0.004])
     gamma_array = np.array([0.99, 0.97, 0.95, 0.93])
     decay_factor = 0.95
     reward_function_index = 1
@@ -76,22 +76,26 @@ if __name__ == "__main__":
     start_x, start_y = coord[0], coord[1]
     start_points.append((start_x, start_y))
 
-    for i in range(20):
+    for i in range(3):
         print(i + 1, "번째 파라미터")
         epsilon = np.random.choice(epsilon_array)
         lr = np.random.choice(lr_array)
         gamma = float(np.random.choice(gamma_array))
         print('epsilon :', epsilon, "lr :", lr, "gamma:", gamma)
 
-        # 에이전트 속도 감소 적용 (지수 감소 방식)
-        agent.speed = max(1, agent.speed * decay_factor)
-
-        model, all_losses = dqn_learning(dem_array, rirsv_transformed, wkmstrm_transformed, climbpath_transformed, road_transformed, watershed_basins_transformed, channels_transformed, forestroad_transformed, hiking_transformed, reward_calculator, agent, action_mode=action_mode, load_existing = False, model_filename = 'dqn_model.pth',_lr=lr, _gamma=gamma, reward_function_index=reward_function_index)
+        # 에이전트 속도 감소 적용
+        agent.update_speed()
+        model, all_losses = dqn_learning(
+            dem_array, rirsv_transformed, wkmstrm_transformed, climbpath_transformed, road_transformed,
+            watershed_basins_transformed, channels_transformed, forestroad_transformed, hiking_transformed,
+            reward_calculator, agent, action_mode=action_mode, load_existing=False, model_filename='dqn_model.pth',
+            _lr=lr, _gamma=gamma, buffer_size=buffer_size, batch_size=batch_size, max_steps=max_steps, episodes=episodes, target_update_freq=target_update_freq,
+            reward_function_index=reward_function_index)
         
         model = load_model('dqn_model.pth', input_dim=12, output_dim=8 if action_mode == '8_directions' else 5)
         path = simulate_path(start_x, start_y, model, dem_array, rirsv_transformed, wkmstrm_transformed, climbpath_transformed, road_transformed, watershed_basins_transformed, channels_transformed, forestroad_transformed, hiking_transformed, agent, action_mode=action_mode)
         paths.append(path)
-        _path.append(path[index - 1]) # path에서 index번째 추가
+        _path.append(path[index - 1])  # path에서 index번째 추가
         print("---------------", i + 1, "번째 model의 path", "-------------------------")
 
     _path = np.array(_path)
@@ -99,9 +103,7 @@ if __name__ == "__main__":
     colors = ['r', 'g', 'b']
 
     # _path를 K-means 클러스터링
-    #kmeans = KMeans(n_clusters=len(colors), n_init=10)
     kmeans = KMeans(n_clusters=len(colors))
-
     kmeans.fit(_path)
 
     # 클러스터 중심 계산
@@ -138,4 +140,4 @@ if __name__ == "__main__":
     plt.legend()
     plt.show()
     
-    plot_loss_from_json('/Users/heekim/Desktop/heekimjun/SAR_Project_Agent/losses.json')
+    plot_loss_from_json('losses.json')
