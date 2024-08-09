@@ -287,17 +287,23 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
     step = 0
 
     visited_count = defaultdict(int)  # 방문한 좌표와 그 횟수를 저장할 딕셔너리
-
+    a = 0 
     while step < simulation_max_steps:
         agent.update_speed(step)  # 속도 업데이트 추가
         state = torch.tensor([x, y, get_elevation(dem_array, x, y), calculate_slope(dem_array, x, y),
                               rirsv_array[x, y], wkmstrm_array[x, y], climbpath_array[x, y],
                               road_array[x, y], watershed_basins_array[x, y], channels_array[x, y],
-                              forestroad_array[x, y], hiking_array[x, y]], dtype=torch.float32)
+                              forestroad_array[x, y], hiking_array[x, y]], dtype=torch.float32).to(device)
         with torch.no_grad():
             action = torch.argmax(model(state)).item()
+        if a== 0:
+            action = action
+        else :
+            if action_mode =='8_directions' :
+                action  = np.random.choice(np.arange(0,8)[np.arange(8)!=action])
+            else : 
+                action  = np.random.choice(np.arange(0,5)[np.arange(5)!=action])
 
-        # 기본 값으로 현재 위치를 설정
         next_x, next_y = x, y
 
         if action_mode == '8_directions':
@@ -350,13 +356,14 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
             elif action == 4 and len(path) > 1:  # 되돌아가기 (Backtracking, BT)
                 next_x, next_y = path[-2]
 
-        # 경계 조건 확인
         next_x = int(min(max(next_x, 0), dem_array.shape[0] - 1))
         next_y = int(min(max(next_y, 0), dem_array.shape[1] - 1))
 
-        if rirsv_array[next_x, next_y] == 1 or channels_array[next_x, next_y] == 1 or wkmstrm_array[next_x, next_y] == 1:
+        if rirsv_array[next_x, next_y] == 1 or channels_array[next_x, next_y] == 1 or wkmstrm_array[next_x, next_y] == 1:  # 이동한 위치가 저수지인 경우
+            a = 1
             continue  # 다른 방향으로 이동하도록 함
-
+        else:
+            a = 0
         path.append((next_x, next_y))
 
         visited_count[(next_x, next_y)] += 1  # 방문 횟수 업데이트

@@ -3,12 +3,14 @@ import numpy as np
 from geo_processing import GISProcessor, load_shapefiles
 from reward import RewardCalculator
 from kmeans_dqn import dqn_learning, simulate_path, load_model, Agent, plot_loss_from_json
-
+import torch
 from utils import show_path_with_arrows, get_random_index
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 from config import *
 import rasterio
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def pixel_to_coords(row, col, transform):
     """Convert pixel coordinates to real world coordinates."""
@@ -26,11 +28,10 @@ def meters_to_pixel_distance(meters, transform):
     return meters / pixel_size_x
 
 if __name__ == "__main__":
-    filename = 'featured_dem.npy'
-    test_area_npy = 'test_area_result.npy'
-
+    filename = '/Users/heekim/Desktop/heekimjun/SAR_Project_Agent/featured_dem.npy'
+    
     # .npy 파일을 로드
-    if (os.path.exists(filename)):
+    if os.path.exists(filename):
         combined_array = np.load(filename)
         print(f"Loaded combined array from {filename}")
         print(f"Combined array shape: {combined_array.shape}")
@@ -76,7 +77,7 @@ if __name__ == "__main__":
     start_x, start_y = coord[0], coord[1]
     start_points.append((start_x, start_y))
 
-    for i in range(3):
+    for i in range(train_iter):
         print(i + 1, "번째 파라미터")
         epsilon = np.random.choice(epsilon_array)
         lr = np.random.choice(lr_array)
