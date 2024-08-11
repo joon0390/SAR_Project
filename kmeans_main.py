@@ -2,7 +2,7 @@ import os
 import numpy as np
 from geo_processing import GISProcessor, load_shapefiles
 from reward2 import RewardCalculator
-from kmeans_dqn2 import dqn_learning, simulate_path, load_model, Agent, DQN ,plot_loss_from_json
+from kmeans_dqn_final import dqn_learning, simulate_path, load_model, Agent, DQN ,plot_loss_from_json
 from utils import show_path_with_arrows, get_random_index
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
@@ -64,28 +64,27 @@ if __name__ == "__main__":
     agent = Agent(age_group='young', gender='male', health_status='good')
     _path = []
     paths = []
-    index = 10 #임의로 100번째 step 위치
+    index = 200 #임의로 100번째 step 위치
 
-    epsilon_array = np.array([0.9,0.85,0.8,0.75,0.7])
     
     lr_array = np.array([0.001,0.005,0.01])
     
     gamma_array = np.array([0.9,0.8])
 
-    reward_function_index = 1
+    reward_function_index = 2
     test_area = np.load(test_area_npy)
     coord = get_random_index(test_area)
     start_x, start_y = coord[0], coord[1]
 
     th = 1
-    for epsilon in epsilon_array:
-        for lr in lr_array:
+    epsilon = agent.explore_ratio
+    for lr in lr_array:
              for gamma in gamma_array:
         # DQN 학습 수행
                 print(th,"번째 파라미터")
                 print('epsilon :' ,epsilon,"lr :",lr,"gamma:",gamma)
 
-                model, all_losses = dqn_learning(dem_array, rirsv_transformed, wkmstrm_transformed, climbpath_transformed, road_transformed, watershed_basins_transformed, channels_transformed, forestroad_transformed, hiking_transformed, reward_calculator, agent, action_mode=action_mode, load_existing = False, model_filename = 'dqn_model.pth',_lr=lr, _gamma=gamma,max_steps=max_steps,episodes=episodes, reward_function_index=reward_function_index)
+                model = dqn_learning(dem_array, rirsv_transformed, wkmstrm_transformed, climbpath_transformed, road_transformed, watershed_basins_transformed, channels_transformed, forestroad_transformed, hiking_transformed, reward_calculator, agent, action_mode=action_mode, load_existing = False, model_filename = 'dqn_model.pth',_lr=lr, _gamma=gamma,max_steps=max_steps,episodes=episodes, reward_function_index=reward_function_index)
                 
                 # 경로 시뮬레이션 예시
                 
@@ -101,7 +100,7 @@ if __name__ == "__main__":
     _path = np.array(_path)
     # _path를 K-means 클러스터링
 
-    kmeans = KMeans(n_clusters=3, n_init=10)
+    kmeans = KMeans(n_clusters=4, n_init=10)
     kmeans.fit(_path)
 
     '-------------------------'
@@ -127,14 +126,14 @@ if __name__ == "__main__":
     colors = ['r', 'g', 'b']
     for i in range(3):
         cluster_points = _path[kmeans.labels_ == i]
-        plt.scatter(cluster_points[:, 1], cluster_points[:, 0], c=colors[i], label=f'Cluster {i+1}')
+        plt.scatter(cluster_points[:, 0], cluster_points[:, 1], c=colors[i], label=f'Cluster {i+1}')
         
         # 원 추가
-        circle = plt.Circle((centers[i][1], centers[i][0]), radii[i], color=colors[i], fill=False, linestyle='--')
+        circle = plt.Circle((centers[i][0], centers[i][1]), radii[i], color=colors[i], fill=False, linestyle='--')
         plt.gca().add_patch(circle)
         
         # 원 중심점 추가 (작게)
-        plt.scatter(centers[i][1], centers[i][0], c=colors[i], marker='x', s=50)
+        plt.scatter(centers[i][0], centers[i][1], c=colors[i], marker='x', s=50)
         
         center_x, center_y = pixel_to_coords(centers[i][0], centers[i][1], dem_transform)
         radius_in_meters = pixel_distance_to_meters(radii[i], dem_transform)
@@ -150,9 +149,9 @@ if __name__ == "__main__":
         # 각 클러스터의 반경 출력
     for i, radius in enumerate(radii):
         print(f"Cluster {i+1} radius: {radius * 5:.2f} meters")
-    
     plt.scatter(x=start_x,y=start_y,c="black")
 
+    print('-----------------','\n',_path,'\n','-'*10)
     plt.title('K-means Clustering of Paths')
     plt.legend()
     plt.show()
