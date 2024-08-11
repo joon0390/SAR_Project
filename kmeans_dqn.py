@@ -44,7 +44,7 @@ class ReplayBuffer:
         self.buffer.append((state, action, reward, next_state, done))
     
     def sample(self, batch_size=64):
-        batch = random.sample(self.buffer, min(len(self.buffer), batch_size)) ##무작위 추출
+        batch = random.sample(self.buffer, batch_size) ##무작위 추출
         states, actions, rewards, next_states, dones = zip(*batch)
         return torch.stack(states), torch.tensor(actions), torch.tensor(rewards), torch.stack(next_states), torch.tensor(dones)
     
@@ -139,7 +139,6 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
                               road_array[int(x), int(y)], watershed_basins_array[int(x), int(y)], channels_array[int(x), int(y)],
                               forestroad_array[int(x), int(y)], hiking_array[int(x), int(y)]], dtype=torch.float32)
         reward_calculator.state_buffer.clear()  # 에피소드 시작 시 버퍼 초기화
-        reward_calculator.visited_count.clear()  # 방문한 좌표 초기화
         done = False
         step = 0
         prev_path = [(x, y)]
@@ -153,7 +152,7 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
             agent.update_speed(step)
 
             
-            if np.random.uniform(0, 1) < epsilon:
+            if np.random.uniform(0, 1) < epsilon or a==1:
                     action = np.random.randint(action_size)
             else:
                     with torch.no_grad():
@@ -163,13 +162,7 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
             
             next_x, next_y = x, y
 
-            if a== 0:
-                action = action
-            else :
-                if action_mode =='8_directions' :
-                    action  = np.random.choice(np.arange(0,8)[np.arange(8)!=action])
-                else : 
-                    action  = np.random.choice(np.arange(0,5)[np.arange(5)!=action])
+            
             # 행동에 따른 다음 위치 계산
             
             if action_mode == '8_directions':
@@ -241,7 +234,7 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
             replay_buffer.add(state, action, reward, next_state, done)  # 리플레이 버퍼에 경험 추가
 
             # 미니배치 학습
-            if len(replay_buffer) >= batch_size:
+            if len(replay_buffer) >= 2*batch_size:
                 states, actions, rewards, next_states, dones = replay_buffer.sample(batch_size)
                 
                 q_values = model(states)
@@ -262,7 +255,6 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
             x, y = next_x, next_y
             prev_path.append((x, y))
 
-            reward_calculator.update_visited_count(x, y)  # 방문 횟수 업데이트
 
             step += 1
 
@@ -285,7 +277,7 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
     save_model(model, filename=model_filename)
     save_losses_to_json(all_losses, filename='losses.json')  # 손실을 JSON 파일로 저장
 
-    return model , all_losses
+    return model
 
 
 
@@ -297,7 +289,6 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
 
     step = 0
 
-    visited_count = defaultdict(int)  # 방문한 좌표와 그 횟수를 저장할 딕셔너리
     a = 0
     while(step < simulation_max_steps):
         state = torch.tensor([x, y, get_elevation(dem_array, x, y), calculate_slope(dem_array, x, y),
@@ -385,7 +376,6 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
             a = 0
         path.append((next_x, next_y))
 
-        visited_count[(next_x, next_y)] += 1  # 방문 횟수 업데이트
 
         x, y = next_x, next_y
 
