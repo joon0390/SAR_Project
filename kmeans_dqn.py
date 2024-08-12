@@ -14,7 +14,7 @@ import random
 import matplotlib.pyplot as plt
 from scipy.stats import truncnorm
 
-device = torch.device( 'cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class Agent:
     def __init__(self, age_group='young', gender='male', health_status='good'):
@@ -54,10 +54,8 @@ class ReplayBuffer:
     def add(self, state, action, reward, next_state, done):
         self.buffer.append((state, action, reward, next_state, done))
     
-    def sample(self, batch_size=64):
-        batch = random.sample(self.buffer, min(len(self.buffer), batch_size))
-        states, actions, rewards, next_states, dones = zip(*batch)
-        return torch.stack(states), torch.tensor(actions), torch.tensor(rewards), torch.stack(next_states), torch.tensor(dones)
+    def get_latest_experience(self):
+        return self.buffer[-1] if len(self.buffer) > 0 else None
     
     def __len__(self):
         return len(self.buffer)
@@ -65,27 +63,14 @@ class ReplayBuffer:
 class DQN(nn.Module):
     def __init__(self, input_dim=12, output_dim=8):
         super(DQN, self).__init__()
-        self.fc1 = nn.Linear(input_dim, 64)
-        self.fc2 = nn.Linear(64, 128)
-        self.fc3 = nn.Linear(128, 128)
-        self.fc4 = nn.Linear(128, 64)
-        self.fc5 = nn.Linear(64, 32)
-        self.fc6 = nn.Linear(32, output_dim)
-        
-        # Dropout layers
-        self.dropout = nn.Dropout(p=0.3)
+        self.fc1 = nn.Linear(input_dim, 24)
+        self.fc2 = nn.Linear(24, 24)
+        self.fc3 = nn.Linear(24, output_dim)
     
     def forward(self, x):
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
-        x = self.dropout(x)
-        x = torch.relu(self.fc3(x))
-        x = self.dropout(x)
-        x = torch.relu(self.fc4(x))
-        x = self.dropout(x)
-        x = torch.relu(self.fc5(x))
-        x = self.fc6(x)
-        return x
+        return self.fc3(x)
 
 def save_model(model, filename='dqn_model.pth'):
     torch.save(model.state_dict(), filename)
@@ -95,9 +80,14 @@ def load_model(filename='dqn_model.pth', input_dim=12, output_dim=8):
     model.load_state_dict(torch.load(filename))
     return model
 
-def save_to_json(data, filename):
+def save_to_json(all_losses, filename):
     with open(filename, 'w') as f:
-        json.dump(data, f)
+        json.dump(all_losses, f)
+
+def load_losses_from_json(filename='losses.json'):
+    with open(filename, 'r') as f:
+        all_losses = json.load(f)
+    return all_losses
 
 def plot_losses_from_json(filename='losses.json'):
     with open(filename, 'r') as f:
@@ -115,7 +105,6 @@ def plot_losses_from_json(filename='losses.json'):
     plt.legend()
     plt.show()
 
-
 def plot_rewards_from_json(filename='rewards.json'):
     with open(filename, 'r') as f:
         all_rewards = json.load(f)
@@ -132,8 +121,7 @@ def plot_rewards_from_json(filename='rewards.json'):
     plt.legend()
     plt.show()
 
-
-def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array, forestroad_array, hiking_array, reward_calculator, agent, action_mode='custom', load_existing=False, model_filename='dqn_model.pth', _lr=0.001, _gamma=0.9, buffer_size=10000, batch_size=64, max_steps=1000, episodes=500, target_update_freq=500, reward_function_index=1):
+def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array, forestroad_array, hiking_array, reward_calculator, agent, action_mode='custom', load_existing=False, model_filename='dqn_model.pth', _lr=0.001, _gamma=0.9, buffer_size=10000, max_steps=1000, episodes=500, target_update_freq=500, reward_function_index=1):
     state_size = 12  # 상태 크기 (12개의 요소로 구성된 튜플)
     if action_mode == '8_directions':
         action_size = 8  # 행동 크기 (8개의 행동)
@@ -141,12 +129,12 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
         action_size = 5  # 행동 크기 (5개의 행동)
     
     if load_existing and os.path.exists(model_filename):
-        model = load_model(model_filename, state_size, action_size)
+        model = load_model(model_filename, state_size, action_size).to(device)
         print(f"Loaded existing model from {model_filename}")
     else:
-        model = DQN(state_size, action_size)
+        model = DQN(state_size, action_size).to(device)
     
-    target_model = DQN(state_size, action_size)
+    target_model = DQN(state_size, action_size).to(device)
     target_model.load_state_dict(model.state_dict())  # 초기에는 주 네트워크와 동일하게 설정
 
     optimizer = optim.Adam(model.parameters(), lr=_lr)
@@ -176,6 +164,8 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
 
     all_losses = []  
     all_rewards = []
+    step_rewards = []  # 모든 스텝별 리워드를 저장할 리스트
+
     for episode in range(episodes):
         x, y = np.random.randint(1, dem_array.shape[0] - 1), np.random.randint(1, dem_array.shape[1] - 1)
         while rirsv_array[x, y] == 1 or channels_array[x, y] == 1 or wkmstrm_array[x, y] == 1:  # 시작점이 저수지 영역, 하천망, 강이면 다시 선택
@@ -185,7 +175,7 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
         state = torch.tensor([x, y, reward_calculator.get_elevation(x, y), reward_calculator.calculate_slope(x, y),
                               rirsv_array[int(x), int(y)], wkmstrm_array[int(x), int(y)], climbpath_array[int(x), int(y)],
                               road_array[int(x), int(y)], watershed_basins_array[int(x), int(y)], channels_array[int(x), int(y)],
-                              forestroad_array[int(x), int(y)], hiking_array[int(x), int(y)]], dtype=torch.float32)
+                              forestroad_array[int(x), int(y)], hiking_array[int(x), int(y)]], dtype=torch.float32).to(device)
 
         reward_calculator.state_buffer.clear()  # 에피소드 시작 시 버퍼 초기화
         done = False
@@ -194,6 +184,7 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
 
         episode_losses = []  # 각 에피소드의 손실을 저장할 리스트
         episode_reward = 0  # 각 에피소드의 총 보상을 추적
+        episode_step_rewards = []  # 각 에피소드의 스텝별 보상을 저장할 리스트
 
         a = 0
         while not done and step < max_steps:
@@ -273,25 +264,34 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
                 next_state = torch.tensor([next_x, next_y, reward_calculator.get_elevation(next_x, next_y), reward_calculator.calculate_slope(next_x, next_y),
                                            rirsv_array[next_x, next_y], wkmstrm_array[next_x, next_y], climbpath_array[next_x, next_y],
                                            road_array[next_x, next_y], watershed_basins_array[next_x, next_y], channels_array[next_x, next_y],
-                                           forestroad_array[next_x, next_y], hiking_array[next_x, next_y]], dtype=torch.float32)
+                                           forestroad_array[next_x, next_y], hiking_array[next_x, next_y]], dtype=torch.float32).to(device)
 
             reward = reward_function(next_state)
             episode_reward += reward
+            episode_step_rewards.append(reward.item())
 
             replay_buffer.add(state, action, reward, next_state, done)
 
-            # 미니배치 학습
-            if len(replay_buffer) >= batch_size:
-                states, actions, rewards, next_states, dones = replay_buffer.sample(batch_size)
+            # 단일 샘플 학습
+            experience = replay_buffer.get_latest_experience()
+            if experience:
+                state_sample, action_sample, reward_sample, next_state_sample, done_sample = experience
+                state_sample, action_sample, reward_sample, next_state_sample, done_sample = (
+                    state_sample.to(device),
+                    torch.tensor(action_sample).to(device),
+                    torch.tensor(reward_sample).to(device),
+                    next_state_sample.to(device),
+                    torch.tensor(done_sample).to(device)
+                )
 
-                q_values = model(states)
-                next_q_values = target_model(next_states).detach()  # 타겟 네트워크 사용
+                q_values = model(state_sample.unsqueeze(0))
+                next_q_values = target_model(next_state_sample.unsqueeze(0)).detach()  # 타겟 네트워크 사용
 
                 # 벨만 방정식을 이용한 타겟 계산
-                targets = rewards + (1 - dones.float()) * gamma * torch.max(next_q_values, dim=1)[0]
+                targets = reward_sample + (1 - done_sample.float()) * gamma * torch.max(next_q_values, dim=1)[0]
 
                 # 손실 계산
-                q_values = q_values.gather(1, actions.unsqueeze(1)).squeeze(1)
+                q_values = q_values.gather(1, action_sample.unsqueeze(0).unsqueeze(0)).squeeze(1)
                 loss = criterion(q_values, targets)
 
                 optimizer.zero_grad()
@@ -308,14 +308,15 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
 
             if step % 10 == 0:
                 with torch.no_grad():
-                    expected_reward = torch.max(model(state)).item()
+                    expected_reward = torch.max(model(state.unsqueeze(0))).item()
                 print(f"Episode {episode}, Step {step}, State ({x}, {y}), Expected Reward: {expected_reward:.2f}")
 
             if step >= max_steps:
                 done = True
 
-        all_losses.append(episode_losses)  # 에피소드의 손실 저장
-        all_rewards.append(episode_reward)
+        all_losses = [loss.tolist() if isinstance(loss, torch.Tensor) else loss for loss in all_losses]
+        all_rewards = [reward.tolist() if isinstance(reward, torch.Tensor) else reward for reward in all_rewards]
+        step_rewards.append(episode_step_rewards)  # 에피소드의 스텝별 보상을 저장
 
         epsilon = max(epsilon_end, epsilon * epsilon_decay)  # 에피소드 후에 epsilon 감소
 
@@ -326,8 +327,9 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
     save_model(model, filename=model_filename)
     save_to_json(all_losses, filename='losses.json')  # 손실을 JSON 파일로 저장
     save_to_json(all_rewards, filename='rewards.json')  # 보상을 JSON 파일로 저장
+    save_to_json(step_rewards, filename='step_rewards.json')  # 스텝별 보상을 JSON 파일로 저장
 
-    return model, all_losses
+    return model, all_losses, all_rewards
 
 def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array, forestroad_array, hiking_array, agent, action_mode='8_directions'):
     path = [(int(start_x), int(start_y))]
@@ -336,23 +338,17 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
     step = 0
 
     visited_count = defaultdict(int)  # 방문한 좌표와 그 횟수를 저장할 딕셔너리
-    a = 0 
+
     while step < simulation_max_steps:
         agent.update_speed(step)  # 속도 업데이트 추가
         state = torch.tensor([x, y, get_elevation(dem_array, x, y), calculate_slope(dem_array, x, y),
                               rirsv_array[x, y], wkmstrm_array[x, y], climbpath_array[x, y],
                               road_array[x, y], watershed_basins_array[x, y], channels_array[x, y],
-                              forestroad_array[x, y], hiking_array[x, y]], dtype=torch.float32).to(device)
+                              forestroad_array[x, y], hiking_array[x, y]], dtype=torch.float32)
         with torch.no_grad():
             action = torch.argmax(model(state)).item()
-        if a== 0:
-            action = action
-        else :
-            if action_mode =='8_directions' :
-                action  = np.random.choice(np.arange(0,8)[np.arange(8)!=action])
-            else : 
-                action  = np.random.choice(np.arange(0,5)[np.arange(5)!=action])
 
+        # 기본 값으로 현재 위치를 설정
         next_x, next_y = x, y
 
         if action_mode == '8_directions':
@@ -405,14 +401,13 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
             elif action == 4 and len(path) > 1:  # 되돌아가기 (Backtracking, BT)
                 next_x, next_y = path[-2]
 
+        # 경계 조건 확인
         next_x = int(min(max(next_x, 0), dem_array.shape[0] - 1))
         next_y = int(min(max(next_y, 0), dem_array.shape[1] - 1))
 
-        if rirsv_array[next_x, next_y] == 1 or channels_array[next_x, next_y] == 1 or wkmstrm_array[next_x, next_y] == 1:  # 이동한 위치가 저수지인 경우
-            a = 1
+        if rirsv_array[next_x, next_y] == 1 or channels_array[next_x, next_y] == 1 or wkmstrm_array[next_x, next_y] == 1:
             continue  # 다른 방향으로 이동하도록 함
-        else:
-            a = 0
+
         path.append((next_x, next_y))
 
         visited_count[(next_x, next_y)] += 1  # 방문 횟수 업데이트
@@ -423,6 +418,13 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
 
     return path
 
-
-if __name__ == "__main__":
-    print(device)
+def plot_loss_from_json(filename='losses.json'):
+    all_losses = load_losses_from_json(filename)
+    flattened_losses = [loss for episode_losses in all_losses for loss in episode_losses]
+    plt.figure(figsize=(10, 5))
+    plt.plot(flattened_losses, label='Loss')
+    plt.xlabel('Step')
+    plt.ylabel('Loss')
+    plt.title('Training Loss over Steps')
+    plt.legend()
+    plt.show()
