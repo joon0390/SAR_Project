@@ -12,7 +12,7 @@ from config import *
 from collections import deque
 import random
 import matplotlib.pyplot as plt
-
+from scipy.stats import truncnorm
 class Agent:
     def __init__(self, age_group='young', gender='male', health_status='good'):
         self.age_group = age_group
@@ -36,18 +36,25 @@ class Agent:
     def update_speed(self, step, decay_factor=0.99):
         self.speed = max(1, self.speed * (decay_factor ** step)) # step에 따른 지수적 감소
 
+    def sample_speed(self):
+        # Truncated normal distribution: a = (lower_bound - mean) / std, b = (upper_bound - mean) / std
+        a, b = (1 - self.speed_mean) / self.speed_std, np.inf  # lower bound is 1 (speed cannot be less than 1)
+        self.speed = truncnorm(a, b, loc=self.speed_mean, scale=self.speed_std).rvs() #truncnorm을 사용하여 speed 조정
+   
+
 class ReplayBuffer:
     def __init__(self, buffer_size=10000):
         self.buffer = deque(maxlen=buffer_size)
     
-    def add(self, state, action, reward, next_state, done):
+    def add(self, state, action, reward, next_state, done):  #버퍼(메모리에) 학습한 state,행동,보상,다음 state,done 추가
         self.buffer.append((state, action, reward, next_state, done))
     
     def sample(self, batch_size=64):
-        batch = random.sample(self.buffer, batch_size) ##무작위 추출
+        batch = random.sample(self.buffer, batch_size)     ##비복원 무작위 추출
         states, actions, rewards, next_states, dones = zip(*batch)
         return torch.stack(states), torch.tensor(actions), torch.tensor(rewards), torch.stack(next_states), torch.tensor(dones)
-    
+    #torch.stack 같은 경우는 차원을 하나 더 만듦 만약 (1,2)의 state가 두개라면 (2,1,2)같은 3차원의 형태로 쌓는 방법
+    #torch.tensro는 torch를 tensor형태로 바꾸는 방식
     def __len__(self):
         return len(self.buffer)
 
@@ -58,14 +65,27 @@ class ReplayBuffer:
 class DQN(nn.Module):
     def __init__(self, input_dim=12, output_dim=8):
         super(DQN, self).__init__()
-        self.fc1 = nn.Linear(input_dim, 24)
-        self.fc2 = nn.Linear(24, 24)
-        self.fc3 = nn.Linear(24, output_dim)
+        self.fc1 = nn.Linear(input_dim, 64)
+        self.fc2 = nn.Linear(64, 128)
+        self.fc3 = nn.Linear(128, 128)
+        self.fc4 = nn.Linear(128, 64)
+        self.fc5 = nn.Linear(64, 32)
+        self.fc6 = nn.Linear(32, output_dim)
+        
+        # Dropout layers
+        self.dropout = nn.Dropout(p=0.3)
     
     def forward(self, x):
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
-        return self.fc3(x)
+        x = self.dropout(x)
+        x = torch.relu(self.fc3(x))
+        x = self.dropout(x)
+        x = torch.relu(self.fc4(x))
+        x = self.dropout(x)
+        x = torch.relu(self.fc5(x))
+        x = self.fc6(x)
+        return x
 
 def save_model(model, filename='dqn_model.pth'):
     torch.save(model.state_dict(), filename)
@@ -75,15 +95,42 @@ def load_model(filename='dqn_model.pth', input_dim=12, output_dim=8):
     model.load_state_dict(torch.load(filename))
     return model
 
-def save_losses_to_json(all_losses, filename='losses.json'):
+def save_to_json(data, filename):
     with open(filename, 'w') as f:
-        json.dump(all_losses, f)
+        json.dump(data, f)
 
-def load_losses_from_json(filename='losses.json'):
+def plot_losses_from_json(filename='losses.json'):
     with open(filename, 'r') as f:
         all_losses = json.load(f)
-    return all_losses
+    
+    # all_losses가 2D 리스트인 경우 1D 리스트로 변환
+    if isinstance(all_losses, list) and isinstance(all_losses[0], list):
+        all_losses = [loss for episode_losses in all_losses for loss in episode_losses]
+    
+    plt.figure(figsize=(10, 5))
+    plt.plot(all_losses, label='Total Loss per Episode')
+    plt.xlabel('Episode')
+    plt.ylabel('Loss')
+    plt.title('Loss over Episodes')
+    plt.legend()
+    plt.show()
 
+
+def plot_rewards_from_json(filename='rewards.json'):
+    with open(filename, 'r') as f:
+        all_rewards = json.load(f)
+    
+    # all_rewards가 2D 리스트인 경우 1D 리스트로 변환
+    if isinstance(all_rewards, list) and isinstance(all_rewards[0], list):
+        all_rewards = [reward for episode_rewards in all_rewards for reward in episode_rewards]
+    
+    plt.figure(figsize=(10, 5))
+    plt.plot(all_rewards, label='Total Reward per Episode')
+    plt.xlabel('Episode')
+    plt.ylabel('Total Reward')
+    plt.title('Reward over Episodes')
+    plt.legend()
+    plt.show()
 
 def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array, forestroad_array, hiking_array, reward_calculator, agent, action_mode='8_directions', load_existing=False, model_filename='dqn_model.pth', _lr=0.001, _gamma=0.9, buffer_size=10000, batch_size=64, max_steps=1000, episodes=500, target_update_freq=500,reward_function_index=1):
     state_size = 12  # 상태 크기 (12개의 요소로 구성된 튜플)
@@ -127,11 +174,15 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
         raise ValueError("Invalid reward function index")
 
     all_losses = []  # 모든 에피소드의 손실을 저장할 리스트
+    all_rewards = [] #모든 에피소드의 total_expected_reward를 저장
 
     for episode in range(episodes):
-        x, y = np.random.randint(1, dem_array.shape[0] - 1), np.random.randint(1, dem_array.shape[1] - 1)
+        test_area = np.load(test_area_npy)
+        coord = get_random_index(test_area)
+        x, y = coord[0], coord[1]
         while rirsv_array[x, y] == 1 or channels_array[x,y]==1 or wkmstrm_array[x,y]==1 :  # 시작점이 저수지 영역,하천망,강이면 다시 선택
-            x, y = np.random.randint(1, dem_array.shape[0] - 1), np.random.randint(1, dem_array.shape[1] - 1)
+            coord = get_random_index(test_area)
+            x, y = coord[0], coord[1]
         
         reward_calculator.start_x, reward_calculator.start_y = x, y
         state = torch.tensor([x, y, reward_calculator.get_elevation(x, y), reward_calculator.calculate_slope(x, y),
@@ -145,6 +196,7 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
 
 
         episode_losses = []  # 각 에피소드의 손실을 저장할 리스트
+        episode_reward = 0
 
         a = 0
         while not done and step < max_steps:
@@ -230,11 +282,13 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
                                        forestroad_array[next_x,next_y],hiking_array[next_x,next_y]], dtype=torch.float32)
 
             reward = reward_function(next_state)
+  
+            episode_reward += reward
 
             replay_buffer.add(state, action, reward, next_state, done)  # 리플레이 버퍼에 경험 추가
 
             # 미니배치 학습
-            if len(replay_buffer) >= 2*batch_size:
+            if len(replay_buffer) >= batch_size:
                 states, actions, rewards, next_states, dones = replay_buffer.sample(batch_size)
                 
                 q_values = model(states)
@@ -250,6 +304,11 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+
+                episode_losses.append(loss.item())  # 손실 저장
+
+
+
 
             state = next_state
             x, y = next_x, next_y
@@ -267,6 +326,7 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
                 done = True
 
         all_losses.append(episode_losses) # 에피소드의 손실 저장
+        all_rewards.append(episode_reward)
 
         epsilon = max(epsilon_end, epsilon * epsilon_decay)  # 에피소드 후에 epsilon 감소
 
@@ -275,8 +335,9 @@ def dqn_learning(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_ar
             target_model.load_state_dict(model.state_dict())
 
     save_model(model, filename=model_filename)
-    save_losses_to_json(all_losses, filename='losses.json')  # 손실을 JSON 파일로 저장
-
+    save_to_json(all_losses, filename='losses.json')  # 손실을 JSON 파일로 저장
+    save_to_json(all_rewards,filename='rewards.json')
+    
     return model
 
 
@@ -384,13 +445,18 @@ def simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array
     return path
 
 
-def plot_loss_from_json(filename='losses.json'):
-    all_losses = load_losses_from_json(filename)
-    flattened_losses = [loss for episode_losses in all_losses for loss in episode_losses]
+def plot_losses_from_json(filename='losses.json'):
+    with open(filename, 'r') as f:
+        all_losses = json.load(f)
+    
+    # all_losses가 2D 리스트인 경우 1D 리스트로 변환
+    if isinstance(all_losses, list) and isinstance(all_losses[0], list):
+        all_losses = [loss for episode_losses in all_losses for loss in episode_losses]
+    
     plt.figure(figsize=(10, 5))
-    plt.plot(flattened_losses, label='Loss')
-    plt.xlabel('Step')
+    plt.plot(all_losses, label='Total Loss per Episode')
+    plt.xlabel('Episode')
     plt.ylabel('Loss')
-    plt.title('Training Loss over Steps')
+    plt.title('Loss over Episodes')
     plt.legend()
     plt.show()
