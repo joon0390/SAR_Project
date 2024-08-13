@@ -2,9 +2,7 @@ import os
 import numpy as np
 from geo_processing import GISProcessor, load_shapefiles
 from reward import RewardCalculator
-from kmeans_dqn import dqn_learning, simulate_path, load_model, Agent, plot_losses_from_json, plot_rewards_from_json
-#from try_try import dqn_learning, simulate_path, load_model, Agent, plot_losses_from_json, plot_rewards_from_json
-
+from try_try import dqn_learning, simulate_path, load_model, Agent, plot_losses_from_json, plot_rewards_from_json
 import torch
 from utils import show_path_with_arrows, get_random_index
 from sklearn.cluster import KMeans
@@ -30,7 +28,7 @@ def meters_to_pixel_distance(meters, transform):
     return meters / pixel_size_x
 
 if __name__ == "__main__":
-    filename = '/mnt/grad/grada1/hee/SAR_Project/featured_dem.npy'
+    filename = '/Users/heekim/Desktop/heekimjun/SAR_Project_Agent/featured_dem.npy'
     
     # .npy 파일을 로드
     if os.path.exists(filename):
@@ -43,34 +41,31 @@ if __name__ == "__main__":
 
     # 채널을 각각 분리
     dem_array = combined_array[:, :, 0]
-    rirsv_transformed = combined_array[:, :, 1]
-    wkmstrm_transformed = combined_array[:, :, 2]
-    climbpath_transformed = combined_array[:, :, 3]
-    road_transformed = combined_array[:, :, 4]
-    watershed_basins_transformed = combined_array[:, :, 5]
-    channels_transformed = combined_array[:, :, 6]
-    forestroad_transformed = combined_array[:, :, 7]
-    hiking_transformed = combined_array[:, :, 8]
+    rirsv_array = combined_array[:, :, 1]
+    wkmstrm_array = combined_array[:, :, 2]
+    climbpath_array = combined_array[:, :, 3]
+    road_array = combined_array[:, :, 4]
+    watershed_basins_array = combined_array[:, :, 5]
+    channels_array = combined_array[:, :, 6]
+    forestroad_array = combined_array[:, :, 7]
+    hiking_array = combined_array[:, :, 8]
 
     # GISProcessor 인스턴스를 통해 DEM 변환 정보 가져오기
     gis_processor = GISProcessor(dem_file)
     dem_transform = gis_processor.dem_transform
 
     # 보상 계산기 인스턴스 생성
-    reward_calculator = RewardCalculator(dem_array, rirsv_transformed, wkmstrm_transformed, climbpath_transformed, road_transformed, watershed_basins_transformed, channels_transformed, forestroad_transformed, hiking_transformed)
+    reward_calculator = RewardCalculator(dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array, forestroad_array, hiking_array)
     
-    #action_mode = 'custom'  # or '8_directions'
-    action_mode = '8_directions'
-    # Agent 인스턴스 생성
+    action_mode = 'custom'
     agent = Agent(age_group='young', gender='male', health_status='good')
     _path = []
     paths = []
     start_points = []
     index = 40  # 임의로 100번째 step 위치
-    #epsilon_array = np.array([0.9, 0.85, 0.8, 0.75, 0.7])
-    lr_array = np.array([0.001, 0.002, 0.003])
-    gamma_array = np.array([0.99, 0.97, 0.95, 0.93])
-    decay_factor = 0.95
+    lr_array = np.array([0.0001])
+    gamma_array = np.array([0.99])
+    decay_factor = 0.99
     reward_function_index = 2
     
     # 동일한 시작점 선택
@@ -79,37 +74,43 @@ if __name__ == "__main__":
     start_x, start_y = coord[0], coord[1]
     start_points.append((start_x, start_y))
 
+    # lr과 gamma를 임의로 선택
+    lr = np.random.choice(lr_array)
+    gamma = np.random.choice(gamma_array)
+    print(f"Selected parameters - lr: {lr}, gamma: {gamma}")
+
+    # train_iter 동안 동일한 lr과 gamma로 반복
     for i in range(train_iter):
-        print(i + 1, "번째 파라미터")
+        print(f"===== Iteration {i + 1}/{train_iter} =====")
         epsilon = agent.explore_ratio
-        lr = np.random.choice(lr_array)
-        gamma = float(np.random.choice(gamma_array))
         print('epsilon :', epsilon, "lr :", lr, "gamma:", gamma)
 
         # 에이전트 속도 감소 적용
-        agent.update_speed()
-        # model, all_losses = dqn_learning(
-        #     dem_array, rirsv_transformed, wkmstrm_transformed, climbpath_transformed, road_transformed,
-        #     watershed_basins_transformed, channels_transformed, forestroad_transformed, hiking_transformed,
-        #     reward_calculator, agent, action_mode=action_mode, load_existing=False, model_filename='dqn_model.pth',
-        #     _lr=lr, _gamma=gamma, buffer_size=buffer_size, batch_size=batch_size, max_steps=max_steps, episodes=episodes, target_update_freq=target_update_freq,
-        #     reward_function_index=reward_function_index)
-        # 배치사이즈 고려한 버전
+        agent.update_speed(decay_factor=decay_factor)
 
-        model, all_losses = dqn_learning(
-            dem_array, rirsv_transformed, wkmstrm_transformed, climbpath_transformed, road_transformed,
-            watershed_basins_transformed, channels_transformed, forestroad_transformed, hiking_transformed,
+        model, all_losses, all_rewards = dqn_learning(
+            dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array,
+            watershed_basins_array, channels_array, forestroad_array, hiking_array,
             reward_calculator, agent, action_mode=action_mode, load_existing=False, model_filename='dqn_model.pth',
             _lr=lr, _gamma=gamma, buffer_size=buffer_size, max_steps=max_steps, episodes=episodes, target_update_freq=target_update_freq,
             reward_function_index=reward_function_index)
-        # 배치 X 
-        
+
         model = load_model('dqn_model.pth', input_dim=12, output_dim=8 if action_mode == '8_directions' else 5)
-        path = simulate_path(start_x, start_y, model, dem_array, rirsv_transformed, wkmstrm_transformed, climbpath_transformed, road_transformed, watershed_basins_transformed, channels_transformed, forestroad_transformed, hiking_transformed, agent, action_mode=action_mode)
+        path = simulate_path(start_x, start_y, model, dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array, forestroad_array, hiking_array, agent, action_mode=action_mode)
         paths.append(path)
         _path.append(path[index - 1])  # path에서 index번째 추가
         print("---------------", i + 1, "번째 model의 path", "-------------------------")
-    
+
+        state = torch.tensor([start_x, start_y, reward_calculator.get_elevation(start_x, start_y), reward_calculator.calculate_slope(start_x, start_y),
+                          rirsv_array[start_x, start_y], wkmstrm_array[start_x, start_y], climbpath_array[start_x, start_y],
+                          road_array[start_x, start_y], watershed_basins_array[start_x, start_y], channels_array[start_x, start_y],
+                          forestroad_array[start_x, start_y], hiking_array[start_x, start_y]], dtype=torch.float32).to(device)
+
+        for episode, reward in enumerate(all_rewards):
+            for step in range(max_steps):
+                with torch.no_grad():
+                    expected_reward = torch.max(model(state.unsqueeze(0))).item()
+                print(f"Train Iter {i + 1}, Episode {episode + 1}, Step {step + 1}, State ({start_x}, {start_y}), Expected Reward: {expected_reward:.2f}")
     _path = np.array(_path)
 
     colors = ['r', 'g', 'b']
@@ -144,14 +145,13 @@ if __name__ == "__main__":
         radius_in_meters = pixel_distance_to_meters(radii[i], dem_transform)
         print(f"Cluster {i+1} Center: ({centers[i][0]}, {centers[i][1]}) with {cluster_sizes[i]} points and Radius: {radius_in_meters:.2f} meters")
     print("Starting Point : ", '(',start_x, start_y,')')
-    # 시작점을 검정색 점으로 표시
+    
     start_points = np.array(start_points)
     plt.scatter(start_points[:, 0], start_points[:, 1], c='k', marker='o', label='Start Point')
 
     plt.title('K-means Clustering of Paths')
     plt.legend()
     plt.show()
+
     plot_losses_from_json('losses.json')
     plot_rewards_from_json('rewards.json')
-
-    
