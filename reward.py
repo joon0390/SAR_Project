@@ -1,20 +1,18 @@
 import numpy as np
-from collections import deque, defaultdict  # Add defaultdict to imports
+from collections import deque  # Add defaultdict to imports
 
 class RewardCalculator:
-    def __init__(self, dem_array, rirsv_array, wkmstrm_array, climbpath_array, road_array, watershed_basins_array, channels_array, forestroad_array, hiking_array):
+    def __init__(self, dem_array, rirsv_array, wkmstrm_array, forestroad_array, road_array, watershed_basins_array, channels_array, climbpath_array):
         self.dem_array = dem_array
         self.rirsv_array = rirsv_array
         self.wkmstrm_array = wkmstrm_array
-        self.climbpath_array = climbpath_array
+        self.forestroad_array = forestroad_array
         self.road_array = road_array
         self.watershed_basins_array = watershed_basins_array
         self.channels_array = channels_array
-        self.forestroad_array = forestroad_array
-        self.hiking_array = hiking_array
+        self.climbpath_array = climbpath_array
         self.current_watershed = None
         self.state_buffer = deque(maxlen=5)
-        self.visited_count = defaultdict(int)
         self.start_x = 0
         self.start_y = 0
 
@@ -31,15 +29,12 @@ class RewardCalculator:
         slope = np.sqrt(dzdx**2 + dzdy**2)
         return slope
 
-    def update_visited_count(self, x, y):
-        """방문한 좌표의 방문 횟수를 업데이트합니다."""
-        self.visited_count[(x, y)] += 1
 
     def reward_function1(self, state):
         """
         일반적인 경우의 보상
         """
-        x, y, elevation, slope, rirsv, wkmstrm, climbpath, road, watershed_basins, channels, forestroad, hiking = state
+        x, y, elevation, slope, rirsv, wkmstrm, forestroad, road, watershed_basins, channels, climbpath = state
 
         reward = 0
      
@@ -66,9 +61,7 @@ class RewardCalculator:
         if forestroad:
             reward += 1000
 
-        # 등산로에 있는 경우 큰 보상
-        if hiking:
-            reward += 20
+
 
         # 시작점에서 멀어질수록 보상을 부여합니다.
         # reward += 0.1 * (abs(state[0] - self.start_x) + abs(state[1] - self.start_y))
@@ -85,7 +78,7 @@ class RewardCalculator:
                 # 이전 상태와 비교하여 보상 및 벌칙을 부여합니다.
 
 
-                if prev_state[6] and curr_state[6]:  # 이전 상태와 현재 상태 모두 등산 경로인 경우
+                if prev_state[-1] and curr_state[-1]:  # 이전 상태와 현재 상태 모두 등산 경로인 경우
                     reward += 10
 
                 if not prev_state[7] and curr_state[7]:  # 이전 상태는 도로가 없었지만 현재 상태는 도로인 경우
@@ -103,9 +96,7 @@ class RewardCalculator:
                 if prev_state[8] and not curr_state[8]:  # 이전 상태는 유역이었지만 현재 상태는 유역이 아닌 경우
                     reward += 5
 
-        # 방문한 횟수에 따라 벌칙을 부여합니다.
-        visits = self.visited_count[(x, y)]
-        reward -= visits * 5
+       
 
         return reward
 
@@ -115,26 +106,24 @@ class RewardCalculator:
         """
         주어진 상태에 대해 보상을 계산합니다. 이 함수는 등산 경로와 도로를 강하게 선호합니다.
         """
-        x, y, elevation, slope, rirsv, wkmstrm, climbpath, road, watershed_basins, channels, forestroad, hiking = state
+        x, y, elevation, slope, rirsv, wkmstrm, forestroad, road, watershed_basins, channels, climbpath = state
 
         reward = -1
 
-        if climbpath:
-            reward += 7000
+        if climbpath: #등산로
+            reward += 10
+        if road: #모든 유형의 도로 multi_polygon
+            reward += 20
 
-        if road:
-            reward += 20000
-
-        if slope > 0.5:
-            reward -= 15
-        else:
-            reward += 15
+        # if slope > 0.5:
+        #     reward -= 150
+        # else:
+        #     reward += 1500
             
-        if forestroad:
-            reward += 10000
+        if forestroad: #임도
+            reward += 20
 
-        if hiking:
-            reward += 50
+       
 
         # reward += 0.15 * (abs(state[0] - self.start_x) + abs(state[1] - self.start_y))
 
@@ -145,25 +134,47 @@ class RewardCalculator:
                 prev_state = self.state_buffer[i - 1]
                 curr_state = self.state_buffer[i]
 
-                if prev_state[2] > curr_state[2]:
-                    reward += 8
+                # if prev_state[2] > curr_state[2]:
+                #     reward += 800
+        #6,7,10 
+                if prev_state[6] and curr_state[6]: #임도 o -> 임도 o 
+                    reward += 3
+                if prev_state[7] and curr_state[7]: #도로 o -> 도로 o 
+                    reward += 3
+                if prev_state[10] and curr_state[10]: #등산로 o -> 등산로 o 
+                    reward += 3
+                
 
-                if prev_state[6] and curr_state[6]:
-                    reward += 20
+                if not prev_state[6] and curr_state[6]: #임도 x -> 임도o
+                    reward += 10
+                if not prev_state[7] and curr_state[7]: #도로 x -> 도로o
+                    reward += 10
+                if not prev_state[10] and curr_state[10]: #등산로 x -> 등산로o
+                    reward += 10
 
-                if not prev_state[7] and curr_state[7]: #길 o -> 길o
-                    reward += 2000
-                if prev_state[7] and not curr_state[7]: # 길o -> 길x
-                    reward -= 500
+                
 
-                if prev_state[3] < curr_state[3]: # 경사 높아진 경우
-                    reward -= 5
-                elif prev_state[3] > curr_state[3]: #경사 낮아진 경우
-                    reward += 5
+                if prev_state[6] and not curr_state[6]: # 임도o -> 임도x
+                    reward -= 15
+                if prev_state[7] and not curr_state[7]: # 로드o -> 로드x
+                    reward -= 15
+                if prev_state[10] and not curr_state[10]: # 등산로o -> 등산로x
+                    reward -= 15
+               
+
+                if prev_state[10] and curr_state[10] :
+                    if prev_state[2] > prev_state[2] :
+                        reward += 4
+                    else :
+                        reward -= 2
+
+                # if prev_state[3] < curr_state[3]: # 경사 높아진 경우
+                #     reward -= 5
+                # elif prev_state[3] > curr_state[3]: #경사 낮아진 경우
+                #     reward += 5
 
 
-        visits = self.visited_count[(x, y)]
-        reward -= visits * 5
+        
 
         return reward
     
@@ -171,7 +182,7 @@ class RewardCalculator:
         """
         주어진 상태에 대해 보상을 계산합니다. 이 함수는 고도가 낮고 경사가 적은 경로를 선호합니다.
         """
-        x, y, elevation, slope, rirsv, wkmstrm, climbpath, road, watershed_basins, channels, forestroad, hiking = state
+        x, y, elevation, slope, rirsv, wkmstrm, forestroad, road, watershed_basins, channels, climbpath = state
 
         reward = 0
 
@@ -191,10 +202,7 @@ class RewardCalculator:
         if road:
             reward += 200
 
-        if hiking:
-            reward += 50
-
-
+ 
         # reward += 0.05 * (abs(state[0] - self.start_x) + abs(state[1] - self.start_y))
 
         self.state_buffer.append(state)
@@ -205,15 +213,51 @@ class RewardCalculator:
                 curr_state = self.state_buffer[i]
 
                 if prev_state[2] > curr_state[2]: #고도가 낮아진 경우 보상
-                    reward += 20
+                    reward += 2
 
-                if prev_state[3] < curr_state[3]: #경사가 높아진 경우 페널티
-                    reward -= 5
-                elif prev_state[3] > curr_state[3]: #경사가 낮아진 겨우 보상
-                    reward += 5
 
-        visits = self.visited_count[(x, y)]
-        reward -= visits * 5
+
+
+
+        if len(self.state_buffer) > 1:
+            for i in range(1, len(self.state_buffer)):
+                prev_state = self.state_buffer[i - 1]
+                curr_state = self.state_buffer[i]
+
+                # if prev_state[2] > curr_state[2]:
+                #     reward += 800
+        #6,7,10 
+                if prev_state[6] and curr_state[6]: #임도 o -> 임도 o 
+                    reward += 3
+                if prev_state[7] and curr_state[7]: #도로 o -> 도로 o 
+                    reward += 3
+                if prev_state[10] and curr_state[10]: #등산로 o -> 등산로 o 
+                    reward += 3
+                
+
+                if not prev_state[6] and curr_state[6]: #임도 x -> 임도o
+                    reward += 10
+                if not prev_state[7] and curr_state[7]: #도로 x -> 도로o
+                    reward += 10
+                if not prev_state[10] and curr_state[10]: #등산로 x -> 등산로o
+                    reward += 10
+
+                
+
+                if prev_state[6] and not curr_state[6]: # 임도o -> 임도x
+                    reward -= 15
+                if prev_state[7] and not curr_state[7]: # 로드o -> 로드x
+                    reward -= 15
+                if prev_state[10] and not curr_state[10]: # 등산로o -> 등산로x
+                    reward -= 15
+               
+
+                if prev_state[10] and curr_state[10] :
+                    if prev_state[2] > prev_state[2] :
+                        reward += 4
+                    else :
+                        reward -= 2
+
 
         return reward
 
@@ -221,7 +265,7 @@ class RewardCalculator:
         """
         주어진 상태에 대해 보상을 계산합니다. 이 함수는 고도가 높고 경사가 적은 경로를 선호합니다.
         """
-        x, y, elevation, slope, rirsv, wkmstrm, climbpath, road, watershed_basins, channels, forestroad, hiking = state
+        x, y, elevation, slope, rirsv, wkmstrm, forestroad, road, watershed_basins, channels, climbpath = state
 
         reward = 0
 
@@ -241,13 +285,10 @@ class RewardCalculator:
         if road:
             reward += 200
 
-        if hiking:
-            reward += 50
 
         if watershed_basins :
             reward += 30
 
-        reward += 0.05 * (abs(state[0] - self.start_x) + abs(state[1] - self.start_y))
 
         self.state_buffer.append(state)
 
@@ -259,13 +300,44 @@ class RewardCalculator:
                 if prev_state[2] < curr_state[2]: #고도가 높아진 경우 보상
                     reward += 20
 
-                if prev_state[3] < curr_state[3]: #경사가 높아진 경우 페널티
-                    reward -= 5
-                elif prev_state[3] > curr_state[3]: #경사가 낮아진 겨우 보상
-                    reward += 5
+        if len(self.state_buffer) > 1:
+            for i in range(1, len(self.state_buffer)):
+                prev_state = self.state_buffer[i - 1]
+                curr_state = self.state_buffer[i]
 
-        visits = self.visited_count[(x, y)]
-        reward -= visits * 5
+                # if prev_state[2] > curr_state[2]:
+                #     reward += 800
+        #6,7,10 
+                if prev_state[6] and curr_state[6]: #임도 o -> 임도 o 
+                    reward += 3
+                if prev_state[7] and curr_state[7]: #도로 o -> 도로 o 
+                    reward += 3
+                if prev_state[10] and curr_state[10]: #등산로 o -> 등산로 o 
+                    reward += 3
+                
+
+                if not prev_state[6] and curr_state[6]: #임도 x -> 임도o
+                    reward += 10
+                if not prev_state[7] and curr_state[7]: #도로 x -> 도로o
+                    reward += 10
+                if not prev_state[10] and curr_state[10]: #등산로 x -> 등산로o
+                    reward += 10
+
+                
+
+                if prev_state[6] and not curr_state[6]: # 임도o -> 임도x
+                    reward -= 15
+                if prev_state[7] and not curr_state[7]: # 로드o -> 로드x
+                    reward -= 15
+                if prev_state[10] and not curr_state[10]: # 등산로o -> 등산로x
+                    reward -= 15
+               
+
+                if prev_state[10] and curr_state[10] :
+                    if prev_state[2] > prev_state[2] :
+                        reward += 4
+                    else :
+                        reward -= 2
 
         return reward
     
@@ -273,7 +345,7 @@ class RewardCalculator:
         """
         일반적인 경우의 보상 (보상을 국소적으로 함)
         """
-        x, y, elevation, slope, rirsv, wkmstrm, climbpath, road, watershed_basins, channels, forestroad, hiking = state
+        x, y, elevation, slope, rirsv, wkmstrm, forestroad, road, watershed_basins, channels, climbpath = state
 
         reward = 0
      
@@ -300,9 +372,7 @@ class RewardCalculator:
             reward += 10
 
         # 등산로에 있는 경우 큰 보상
-        if hiking:
-            reward += 5
-
+      
         # 시작점에서 멀어질수록 보상을 부여합니다.
         # reward += 0.1 * (abs(state[0] - self.start_x) + abs(state[1] - self.start_y))
 
@@ -312,33 +382,46 @@ class RewardCalculator:
         # state_buffer에 2개 이상의 상태가 있는 경우, 이전 상태와 현재 상태를 비교합니다.
         if len(self.state_buffer) > 1:
             for i in range(1, len(self.state_buffer)):
-                prev_state = self.state_buffer[i - 1]  # 이전 상태
-                curr_state = self.state_buffer[i]      # 현재 상태
+                prev_state = self.state_buffer[i - 1]
+                curr_state = self.state_buffer[i]
 
-                # 이전 상태와 비교하여 보상 및 벌칙을 부여합니다.
+                # if prev_state[2] > curr_state[2]:
+                #     reward += 800
+        #6,7,10 
+                if prev_state[6] and curr_state[6]: #임도 o -> 임도 o 
+                    reward += 3
+                if prev_state[7] and curr_state[7]: #도로 o -> 도로 o 
+                    reward += 3
+                if prev_state[10] and curr_state[10]: #등산로 o -> 등산로 o 
+                    reward += 3
+                
 
-
-                if prev_state[6] and curr_state[6]:  # 이전 상태와 현재 상태 모두 등산 경로인 경우
-                    reward += 5
-
-                if not prev_state[7] and curr_state[7]:  # 이전 상태는 도로가 없었지만 현재 상태는 도로인 경우
-                    reward += 5
-                if prev_state[7] and not curr_state[7]:  # 이전 상태는 도로였지만 현재 상태는 도로가 아닌 경우
-                    reward -= 5
-
-                if prev_state[3] < curr_state[3]:  # 이전 상태보다 경사가 커진 경우
-                    reward -= 1
-                elif prev_state[3] > curr_state[3]:  # 이전 상태보다 경사가 작아진 경우
-                    reward += 1
-              
-                if not prev_state[6] and curr_state[6]:  # 이전 상태는 등산 경로가 아니었지만 현재 상태는 등산 경로인 경우
+                if not prev_state[6] and curr_state[6]: #임도 x -> 임도o
+                    reward += 10
+                if not prev_state[7] and curr_state[7]: #도로 x -> 도로o
+                    reward += 10
+                if not prev_state[10] and curr_state[10]: #등산로 x -> 등산로o
                     reward += 10
 
+                
 
-        # 방문한 횟수에 따라 벌칙을 부여합니다.
-        visits = self.visited_count[(x, y)]
-        reward -= visits * 5
+                if prev_state[6] and not curr_state[6]: # 임도o -> 임도x
+                    reward -= 15
+                if prev_state[7] and not curr_state[7]: # 로드o -> 로드x
+                    reward -= 15
+                if prev_state[10] and not curr_state[10]: # 등산로o -> 등산로x
+                    reward -= 15
+               
 
+                if prev_state[10] and curr_state[10] :
+                    if prev_state[2] > prev_state[2] :
+                        reward += 4
+                    else :
+                        reward -= 2
+
+
+
+   
         return reward
 
 
