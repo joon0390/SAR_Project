@@ -1,72 +1,123 @@
 import numpy as np
-import pandas as pd
-import rasterio
-import geopandas as gpd
 import matplotlib.pyplot as plt
-from rasterio.plot import show
-from pyproj import Transformer
-from rasterio.transform import Affine
-import os
-from shapely.geometry import Point
+from sklearn.cluster import KMeans
+import torch
+import json
+import pandas as pd
 
-def load_and_print_npy(filename, slice_range=None):
-    if os.path.exists(filename):
-        array = np.load(filename)
-        print(f"Array loaded from {filename}")
-        print(f"Array shape: {array.shape}")
+def visualize_paths(dem_array, _path, dem_transform, index, start_points, output_file=None):
+    """
+    시각화 함수: K-means 클러스터링을 통해 경로를 시각화하고, 경로 중심점과 반지름을 계산하여 출력합니다.
+    
+    Parameters:
+    dem_array (numpy.ndarray): 지형 데이터 배열.
+    _path (numpy.ndarray): 에이전트의 경로 데이터.
+    dem_transform (Affine): DEM 변환 정보.
+    index (int): 경로 인덱스.
+    start_points (list): 시작점 목록.
+    output_file (str, optional): 시각화 결과를 저장할 파일 이름.
+    """
+    colors = ['r', 'g', 'b']
+
+    # _path를 K-means 클러스터링
+    kmeans = KMeans(n_clusters=len(colors))
+    kmeans.fit(_path)
+
+    # 클러스터 중심 계산
+    centers = kmeans.cluster_centers_
+
+    # 각 클러스터의 반지름 계산 (최대 거리 사용)
+    radii = [np.max(np.linalg.norm(_path[kmeans.labels_ == i] - centers[i], axis=1)) for i in range(len(colors))]
+
+    # 각 클러스터의 점 개수
+    cluster_sizes = [np.sum(kmeans.labels_ == i) for i in range(len(colors))]
+    
+    # 클러스터 시각화
+    plt.figure(figsize=(10, 10))
+    plt.imshow(dem_array, cmap='terrain')
+
+    for i in range(len(colors)):
+        cluster_points = _path[kmeans.labels_ == i]
+        plt.scatter(cluster_points[:, 0], cluster_points[:, 1], c=colors[i], label=f'Cluster {i+1} ({cluster_sizes[i]} points)')
         
-        if slice_range:
-            sliced_array = array[slice_range]
-            print(f"Sliced Array shape: {sliced_array.shape}")
-            print(f"Sliced Array contents:\n{sliced_array}")
-        else:
-            print(f"Array contents:\n{array}")
+        # 원 추가
+        circle = plt.Circle((centers[i][0], centers[i][1]), radii[i], color=colors[i], fill=False, linestyle='--')
+        plt.gca().add_patch(circle)
+
+        # 원의 중심점과 반지름을 미터로 변환하여 출력
+        center_x_meters, center_y_meters = pixel_to_coords(centers[i][0], centers[i][1], dem_transform)
+        radius_in_meters = pixel_distance_to_meters(radii[i], dem_transform)
+        print(f"Cluster {i+1} Center: ({centers[i][0]}, {centers[i][1]}) with {cluster_sizes[i]} points and Radius: {radius_in_meters:.2f} meters")
+    
+    print("Starting Point : ", '(', start_points[0][0], start_points[0][1], ')')
+    
+    start_points = np.array(start_points)
+    plt.scatter(start_points[:, 0], start_points[:, 1], c='k', marker='o', label='Start Point')
+
+    plt.title('K-means Clustering of Paths')
+    plt.legend()
+
+    if output_file:
+        plt.savefig(output_file)
     else:
-        print(f"{filename} does not exist.")
-        
-def show_path_on_dem(dem_array, path):
-    '''
-    경로를 DEM 지도 위에 시각화
-    '''
-    fig, ax = plt.subplots(figsize=(10, 10))
-    show(dem_array, ax=ax, cmap='terrain')
+        plt.show()
+
+def pixel_to_coords(row, col, transform):
+    """Convert pixel coordinates to real world coordinates."""
+    x, y = transform * (row, col)
+    return x, y
+
+def pixel_distance_to_meters(pixel_distance, transform):
+    """Convert pixel distance to meters using the transform."""
+    pixel_size_x = transform[0]
+    return pixel_distance * pixel_size_x
+
+def plot_losses_and_rewards(losses, rewards, output_file=None):
+    """
+    손실 및 보상을 시각화하는 함수입니다.
+
+    Parameters:
+    losses (list): 학습 손실.
+    rewards (list): 에피소드 보상.
+    output_file (str, optional): 시각화 결과를 저장할 파일 이름.
+    """
+    # Create new graph 
+    plt.figure(figsize=(14, 6))
+
+    # Plot average rewards (Y-axis) vs episodes (X-axis)
+    plt.subplot(121)  # plot on a 1 row x 2 col grid, at cell 1
+    plt.plot(rewards)
+    plt.title('Rewards Over Episodes')
+    plt.xlabel('Episodes')
+    plt.ylabel('Total Rewards')
     
-    # 경로 플롯 (DEM 배열의 인덱스를 사용)
-    path_x, path_y = zip(*path)
-    ax.plot(path_y, path_x, marker='o', color='red', linewidth=2, markersize=5, label='Path')
+    # Plot losses (Y-axis) vs episodes (X-axis)
+    plt.subplot(122)  # plot on a 1 row x 2 col grid, at cell 2
+    plt.plot(losses)
+    plt.title('Losses Over Episodes')
+    plt.xlabel('Episodes')
+    plt.ylabel('Loss')
 
-    ax.set_title('Path Visualization on DEM')
-    ax.legend()
-    
-    plt.show()
+    if output_file:
+        plt.savefig(output_file)
+    else:
+        plt.show()
 
-def show_path_with_arrows(dem_array, path):
-    '''
-    경로를 DEM 지도 위에 화살표로 시각화하는 함수
-    '''
-    fig, ax = plt.subplots(figsize=(10, 10))
-    show(dem_array, ax=ax, cmap='terrain')
+def save_to_json(data, filename):
+    with open(filename, 'w') as f:
+        json.dump(data, f)
 
-    # 경로 시각화
-    path_x, path_y = zip(*path)
+def load_losses_from_json(filename='losses.json'):
+    with open(filename, 'r') as f:
+        all_losses = json.load(f)
+    return all_losses
 
-    # 화살표의 방향을 계산
-    dx = np.diff(path_y)
-    dy = np.diff(path_x)
+def plot_losses_from_json(filename='losses.json'):
+    with open(filename, 'r') as f:
+        all_losses = json.load(f)
 
-    # 경로 시작점과 화살표 표시
-    ax.quiver(path_y[:-1], path_x[:-1], dx, dy, scale_units='xy', angles='xy', scale=1, color='red', label='Path', headwidth=3, headlength=5)
-    ax.plot(path_y, path_x, 'ro')  # 경로의 각 지점에 점 표시
-
-    ax.set_title('Path Visualization on DEM with Arrows')
-    ax.legend()
-
-    plt.show()
 
 def array_2_plot(array):
-    '''
-    각 shapefile을 변환된 DEM 영역에 맞춰 변환한 array가 input
-    '''
     array = pd.DataFrame(array)
     fig, ax = plt.subplots(figsize=(20, 20)) 
     ax.imshow(array, cmap='gray', interpolation='none') 
@@ -86,125 +137,55 @@ def calculate_slope(dem_array, x, y):
     slope = np.sqrt(dzdx**2 + dzdy**2)  # 경사도 계산
     return slope
 
-
-def plot_dem_and_shapefile(dem_file_path, shapefile_path, cmap='terrain', shapefile_color='red'):
-    """
-    DEM 파일과 셰이프파일을 함께 그리는 함수
-    
-    Parameters:
-    - dem_file_path: str, DEM 파일의 경로
-    - shapefile_path: str, 셰이프파일의 경로
-    - cmap: str, DEM 파일의 컬러맵 (기본값은 'terrain')
-    - shapefile_color: str, 셰이프파일의 경계선 색상 (기본값은 'red')
-    """
-    # DEM 파일 읽기
-    with rasterio.open(dem_file_path) as dem_dataset:
-        dem_data = dem_dataset.read(1)
-        dem_transform = dem_dataset.transform
-
-    # 셰이프 파일 읽기
-    shapefile_data = gpd.read_file(shapefile_path)
-
-    # 플롯 설정
-    fig, ax = plt.subplots(figsize=(10, 10))
-
-    # DEM 데이터 플롯
-    show(dem_data, transform=dem_transform, ax=ax, cmap=cmap)
-
-    # 셰이프 파일 플롯
-    shapefile_data.plot(ax=ax, facecolor='none', edgecolor=shapefile_color)
-
-    plt.title('DEM and Shapefile Overlay')
-    plt.xlabel('Longitude')
-    plt.ylabel('Latitude')
-    plt.show()
-
-def print_dem_and_shapefile_values(dem_file_path, shapefile_path):
-    """
-    DEM 파일과 셰이프파일의 값을 출력하는 함수
-    
-    Parameters:
-    - dem_file_path: str, DEM 파일의 경로
-    - shapefile_path: str, 셰이프파일의 경로
-    """
-    # DEM 파일 읽기
-    with rasterio.open(dem_file_path) as dem_dataset:
-        dem_data = dem_dataset.read(1)
-        dem_transform = dem_dataset.transform
-
-    # 셰이프 파일 읽기
-    shapefile_data = gpd.read_file(shapefile_path)
-
-    # DEM 데이터 출력
-    print("DEM Data:")
-    print(dem_data)
-
-    # 셰이프 파일 데이터 출력
-    print("\nShapefile Data:")
-    print(shapefile_data)
-
-# def get_random_point_within_polygon(shapefile_path, reference_shapefile_path, dem_shape):
-#     # Load the shapefiles
-#     gdf = gpd.read_file(shapefile_path)
-#     reference_gdf = gpd.read_file(reference_shapefile_path)
-    
-#     # Assuming there's only one polygon in each shapefile
-#     polygon = gdf.geometry[0]
-#     reference_polygon = reference_gdf.geometry[0]
-    
-#     # Get the coordinate reference systems (CRS)
-#     src_crs = gdf.crs
-#     dst_crs = reference_gdf.crs
-    
-#     # Initialize the transformer
-#     transformer = Transformer.from_crs(src_crs, dst_crs, always_xy=True)
-    
-#     # Get the bounding box of the polygon
-#     minx, miny, maxx, maxy = polygon.bounds
-    
-#     while True:
-#         # Generate random points within the bounding box
-#         pnt = Point(np.random.uniform(minx, maxx), np.random.uniform(miny, maxy))
-        
-#         # Check if the point is within the polygon
-#         if polygon.contains(pnt):
-#             # Transform the point to the reference CRS
-#             pnt_x, pnt_y = transformer.transform(pnt.x, pnt.y)
-            
-#             # Convert the coordinates to DEM array indices
-#             dem_x = int((pnt_x - reference_polygon.bounds[0]) / (reference_polygon.bounds[2] - reference_polygon.bounds[0]) * dem_shape[0])
-#             dem_y = int((pnt_y - reference_polygon.bounds[1]) / (reference_polygon.bounds[3] - reference_polygon.bounds[1]) * dem_shape[1])
-            
-#             # Check if the transformed point is within the DEM bounds
-#             if 0 <= dem_x < dem_shape[0] and 0 <= dem_y < dem_shape[1]:
-#                 return dem_x, dem_y
-
 def get_random_index(array):
-    # 0이 아닌 요소의 인덱스를 찾음
     non_zero_indices = np.nonzero(array)
     non_zero_indices = list(zip(*non_zero_indices))
     random_index = np.random.choice(len(non_zero_indices))
     return non_zero_indices[random_index]
 
+def check_true_values_in_array(target_array, array_name="Array"):
+    true_count = np.sum(target_array)
+    print(f"Debug: Total number of True values in {array_name}: {true_count}")
+    if true_count > 0:
+        print(f"Debug: True values found in {array_name}")
+    else:
+        print(f"Debug: No True values found in {array_name}")
+
+
+if __name__ == "__main__":
+    import json
+    import matplotlib.pyplot as plt
+
+    def plotter(json_file):
+        # JSON 파일에서 손실 데이터를 로드합니다.
+        with open(json_file, 'r') as file:
+            losses = json.load(file)
+        
+        # 손실 데이터가 리스트 또는 단일 값인 경우를 처리합니다.
+        if isinstance(losses, list) and isinstance(losses[0], list):
+            # 각 에피소드의 손실 리스트에서 평균 손실 값을 계산합니다.
+            avg_losses = [sum(episode_losses)/len(episode_losses) if len(episode_losses) > 0 else 0 for episode_losses in losses]
+        elif isinstance(losses, list):
+            # 손실 데이터가 리스트의 리스트가 아닌 경우 그대로 사용합니다.
+            avg_losses = losses
+        else:
+            raise ValueError("Unsupported data format in the JSON file")
+
+        # 그래프를 생성합니다.
+        plt.figure(figsize=(10, 6))
+        plt.plot(avg_losses, label='Total Rewards per Episode', color='blue')
+        
+        # 그래프에 제목, 레이블, 범례 등을 추가합니다.
+        plt.title('Reward over Episodes')
+        plt.xlabel('Episode')
+        plt.ylabel('Total Rewards')
+        plt.legend()
+        plt.grid(True)
+        
+        # 그래프를 화면에 출력합니다.
+        plt.show()
 
 
 
-if __name__ == '__main__':
-    filename = '/Users/heekim/Desktop/heekimjun/SAR_Project_Agent/test_area_result.npy'
-    files = '/Users/heekim/Documents/GitHub/SAR_Project/featured_dem.npy'
-
-   # 1. numpy 배열 로드
-    test_area = np.load(filename)
-
-    # 2. 배열의 기본 정보 출력
-    print(f"Array shape: {test_area.shape}")
-    print(f"Array contents:\n{test_area}")
-
-    # 3. 값이 0이 아닌 요소 확인
-    non_zero_indices = np.nonzero(test_area)
-    print(non_zero_indices)
-    
-    random_nonzero_index = get_random_index(test_area)
-    print(random_nonzero_index[0],random_nonzero_index[1])
-    print(f"Random non-zero index: {random_nonzero_index}")
-  
+    plotter('/Users/heekim/Desktop/losses.json')
+    plotter('/Users/heekim/Desktop/rewards.json')
